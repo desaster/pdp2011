@@ -1,4 +1,4 @@
-
+ 
 --
 -- Copyright (c) 2008-2019 Sytse van Slooten
 --
@@ -12,54 +12,43 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.5 $
+-- $Revision: 1.8 $
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL; 
- 
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
 entity top is
    port(
-      redled : out std_logic_vector(9 downto 0);
+      -- console serial port
+      rx : in std_logic;
+      tx : out std_logic;
+      cts : in std_logic;
+      rts : out std_logic;
+      -- second serial port
+      rx1: in std_logic;
+      tx1: out std_logic;
 
-      sseg5 : out std_logic_vector(6 downto 0);
-      sseg4 : out std_logic_vector(6 downto 0);
-      sseg3 : out std_logic_vector(6 downto 0);
-      sseg2 : out std_logic_vector(6 downto 0);
-      sseg1 : out std_logic_vector(6 downto 0);
-      sseg0 : out std_logic_vector(6 downto 0);
-
-      vgar : out std_logic_vector(3 downto 0);
-      vgag : out std_logic_vector(3 downto 0);
-      vgab : out std_logic_vector(3 downto 0);
-      vgah : out std_logic;
-      vgav : out std_logic;
-
-      clkin : in std_logic;
-
-      sw : in std_logic_vector(9 downto 0);
-
-      ps2k_c : in std_logic;
-      ps2k_d : in std_logic;
-
-      tx1 : out std_logic;
-      rx1 : in std_logic;
-      rts1 : out std_logic;
-      cts1 : in std_logic;
-
+      -- sd card
       sdcard_cs : out std_logic;
       sdcard_mosi : out std_logic;
       sdcard_sclk : out std_logic;
       sdcard_miso : in std_logic;
 
--- ethernet, enc424j600 controller interface
+      -- enc424j600 backend for xu
       xu_cs : out std_logic;
       xu_mosi : out std_logic;
       xu_sclk : out std_logic;
       xu_miso : in std_logic;
-      xu_debug_tx : out std_logic;                                   -- rs232, 115200/8/n/1 debug output from microcode
+      xu_debug_tx : out std_logic;
 
+      -- pidp11 console
+      panel_xled : out std_logic_vector(5 downto 0);
+      panel_col : inout std_logic_vector(11 downto 0);
+      panel_row : out std_logic_vector(2 downto 0);
+
+      -- dram
       dram_addr : out std_logic_vector(12 downto 0);
       dram_dq : inout std_logic_vector(15 downto 0);
       dram_ba_1 : out std_logic;
@@ -73,12 +62,34 @@ entity top is
       dram_we_n : out std_logic;
       dram_cs_n : out std_logic;
 
-      clkout : out std_logic; 
+      -- board peripherals
+      sw : in std_logic_vector(9 downto 0);
+      button1 : in std_logic;
+      redled : out std_logic_vector(9 downto 0);
+
+      resetbutton : in std_logic;
+
+      sseg5 : out std_logic_vector(6 downto 0);
+      sseg4 : out std_logic_vector(6 downto 0);
+      sseg3 : out std_logic_vector(6 downto 0);
+      sseg2 : out std_logic_vector(6 downto 0);
+      sseg1 : out std_logic_vector(6 downto 0);
+      sseg0 : out std_logic_vector(6 downto 0);
+
+      ps2k_c : in std_logic;
+      ps2k_d : in std_logic;
+
+      vgar : out std_logic_vector(3 downto 0);
+      vgag : out std_logic_vector(3 downto 0);
+      vgab : out std_logic_vector(3 downto 0);
+      vgah : out std_logic;
+      vgav : out std_logic;
+
+      clkout : out std_logic;
       clkout2 : out std_logic;
       pod : out std_logic_vector(7 downto 0);
 
-      button1 : in std_logic;
-      resetbtn : in std_logic
+      clkin : in std_logic
    );
 end top;
 
@@ -173,10 +184,26 @@ component unibus is
       kl3_force7bit : in integer range 0 to 1 := 0;
       kl3_rtscts : in integer range 0 to 1 := 0;
 
+-- dr11c, universal interface
+
+      have_dr11c : in integer range 0 to 1 := 0;                     -- conditional compilation
+      have_dr11c_loopback : in integer range 0 to 1 := 0;            -- for testing only - zdrc
+      have_dr11c_signal_stretch : in integer range 0 to 127 := 7;    -- the signals ndr*, dxm, init will be stretched to this many cpu cycles
+
+      dr11c_in : in std_logic_vector(15 downto 0) := (others => '0');
+      dr11c_out : out std_logic_vector(15 downto 0);
+      dr11c_reqa : in std_logic := '0';
+      dr11c_reqb : in std_logic := '0';
+      dr11c_csr0 : out std_logic;
+      dr11c_csr1 : out std_logic;
+      dr11c_ndr : out std_logic;                                     -- new data ready : dr11c_out has new data
+      dr11c_ndrlo : out std_logic;                                   -- new data ready : dr11c_out(7 downto 0) has new data
+      dr11c_ndrhi : out std_logic;                                   -- new data ready : dr11c_out(15 downto 8) has new data
+      dr11c_dxm : out std_logic;                                     -- data transmitted : dr11c_in data has been read by the cpu
+      dr11c_init : out std_logic;                                    -- unibus reset propagated out to the user device
+
 -- cpu console, switches and display register
       have_csdr : in integer range 0 to 1 := 1;
-      console_switches : in std_logic_vector(15 downto 0) := "0000000000000000";
-      console_displays : out std_logic_vector(15 downto 0);
 
 -- clock
       have_kw11l : in integer range 0 to 1 := 1;                     -- conditional compilation
@@ -191,11 +218,89 @@ component unibus is
       init_r7 : in std_logic_vector(15 downto 0) := x"ea10";         -- start address after reset f600 = o'173000' = m9312 hi rom; ea10 = 165020 = m9312 lo rom
       init_psw : in std_logic_vector(15 downto 0) := x"00e0";        -- initial psw for kernel mode, primary register set, priority 7
 
--- clock, run & reset
-      run : in std_logic := '0';                                     -- set to '1' to restart cpu from halt state
+-- console
+      cons_load : in std_logic := '0';
+      cons_exa : in std_logic := '0';
+      cons_dep : in std_logic := '0';
+      cons_cont : in std_logic := '0';                               -- continue, pulse '1'
+      cons_ena : in std_logic := '1';                                -- ena/halt, '1' is enable
+      cons_start : in std_logic := '0';
+      cons_sw : in std_logic_vector(21 downto 0) := (others => '0');
+      cons_adss_mode : in std_logic_vector(1 downto 0) := (others => '0');
+      cons_adss_id : in std_logic := '0';
+      cons_adss_cons : in std_logic := '0';
+      cons_consphy : out std_logic_vector(21 downto 0);
+      cons_progphy : out std_logic_vector(21 downto 0);
+      cons_br : out std_logic_vector(15 downto 0);
+      cons_shfr : out std_logic_vector(15 downto 0);
+      cons_maddr : out std_logic_vector(15 downto 0);                -- microcode address fpu/cpu
+      cons_dr : out std_logic_vector(15 downto 0);
+      cons_parh : out std_logic;
+      cons_parl : out std_logic;
+
+      cons_adrserr : out std_logic;
+      cons_run : out std_logic;                                      -- '1' if executing instructions (incl wait)
+      cons_pause : out std_logic;                                    -- '1' if bus has been relinquished to npr
+      cons_master : out std_logic;                                   -- '1' if cpu is bus master and not running
+      cons_kernel : out std_logic;                                   -- '1' if kernel mode
+      cons_super : out std_logic;                                    -- '1' if super mode
+      cons_user : out std_logic;                                     -- '1' if user mode
+      cons_id : out std_logic;                                       -- '0' if instruction, '1' if data AND data mapping is enabled in the mmu
+      cons_map16 : out std_logic;                                    -- '1' if 16-bit mapping
+      cons_map18 : out std_logic;                                    -- '1' if 18-bit mapping
+      cons_map22 : out std_logic;                                    -- '1' if 22-bit mapping
+
+-- clocks and reset
       clk : in std_logic;                                            -- cpu clock
       clk50mhz : in std_logic;                                       -- 50Mhz clock for peripherals
       reset : in std_logic                                           -- active '1' synchronous reset
+   );
+end component;
+
+component paneldriver is
+   port(
+      panel_xled : out std_logic_vector(5 downto 0);
+      panel_col : inout std_logic_vector(11 downto 0);
+      panel_row : out std_logic_vector(2 downto 0);
+
+      cons_load : out std_logic;
+      cons_exa : out std_logic;
+      cons_dep : out std_logic;
+      cons_cont : out std_logic;
+      cons_ena : out std_logic;
+      cons_inst : out std_logic;
+      cons_start : out std_logic;
+      cons_sw : out std_logic_vector(21 downto 0);
+      cons_adss_mode : out std_logic_vector(1 downto 0);
+      cons_adss_id : out std_logic;
+      cons_adss_cons : out std_logic;
+
+      cons_consphy : in std_logic_vector(21 downto 0);
+      cons_progphy : in std_logic_vector(21 downto 0);
+      cons_shfr : in std_logic_vector(15 downto 0);
+      cons_maddr : in std_logic_vector(15 downto 0);                 -- microcode address fpu/cpu
+      cons_br : in std_logic_vector(15 downto 0);
+      cons_dr : in std_logic_vector(15 downto 0);
+      cons_parh : in std_logic;
+      cons_parl : in std_logic;
+
+      cons_adrserr : in std_logic;
+      cons_run : in std_logic;
+      cons_pause : in std_logic;
+      cons_master : in std_logic;
+      cons_kernel : in std_logic;
+      cons_super : in std_logic;
+      cons_user : in std_logic;
+      cons_id : in std_logic;
+      cons_map16 : in std_logic;
+      cons_map18 : in std_logic;
+      cons_map22 : in std_logic;
+
+      sample_cycles : in std_logic_vector(15 downto 0) := x"0400";
+      minon_cycles : in std_logic_vector(15 downto 0) := x"0400";
+
+      clkin : in std_logic;
+      reset : in std_logic
    );
 end component;
 
@@ -242,7 +347,10 @@ component pll is
 end component;
 
 signal c0 : std_logic;
+signal c0_locked : std_logic;
+signal c0_reset : std_logic := '1';
 
+signal reset : std_logic;
 signal cpuclk : std_logic := '0';
 signal cpureset : std_logic := '1';
 signal cpuresetlength : integer range 0 to 63 := 63;
@@ -252,9 +360,8 @@ signal vtreset : std_logic := '1';
 
 signal ifetch: std_logic;
 signal iwait: std_logic;
-signal reset: std_logic;
-signal txtx0 : std_logic;
-signal rxrx0 : std_logic;
+signal txtx : std_logic;
+signal rxrx : std_logic;
 signal txtx1 : std_logic;
 signal rxrx1 : std_logic;
 
@@ -265,8 +372,6 @@ signal dato : std_logic_vector(15 downto 0);
 signal control_dati : std_logic;
 signal control_dato : std_logic;
 signal control_datob : std_logic;
-signal console_switches : std_logic_vector(15 downto 0);
-signal console_displays : std_logic_vector(15 downto 0);
 
 signal have_rl : integer range 0 to 1;
 signal rl_cs : std_logic;
@@ -300,10 +405,6 @@ signal dram_counter : integer range 0 to 32767;
 signal dram_wait : integer range 0 to 15;
 
 signal dram_refresh_count : integer range 0 to 255;
-signal we_n : std_logic;
-signal cs_n : std_logic;
-
-signal plllocked : std_logic;
 
 type dram_fsm_type is (
    dram_init,
@@ -329,28 +430,62 @@ type dram_fsm_type is (
 );
 signal dram_fsm : dram_fsm_type := dram_init;
 
+signal cons_load : std_logic;
+signal cons_exa : std_logic;
+signal cons_dep : std_logic;
+signal cons_cont : std_logic;
+signal cons_ena : std_logic;
+signal cons_start : std_logic;
+signal cons_sw : std_logic_vector(21 downto 0);
+signal cons_adss_mode : std_logic_vector(1 downto 0);
+signal cons_adss_id : std_logic;
+signal cons_adss_cons : std_logic;
+
+signal cons_consphy : std_logic_vector(21 downto 0);
+signal cons_progphy : std_logic_vector(21 downto 0);
+signal cons_br : std_logic_vector(15 downto 0);
+signal cons_shfr : std_logic_vector(15 downto 0);
+signal cons_maddr : std_logic_vector(15 downto 0);
+signal cons_dr : std_logic_vector(15 downto 0);
+signal cons_parh : std_logic;
+signal cons_parl : std_logic;
+
+signal cons_adrserr : std_logic;
+signal cons_run : std_logic;
+signal cons_pause : std_logic;
+signal cons_master : std_logic;
+signal cons_kernel : std_logic;
+signal cons_super : std_logic;
+signal cons_user : std_logic;
+signal cons_id : std_logic;
+signal cons_map16 : std_logic;
+signal cons_map18 : std_logic;
+signal cons_map22 : std_logic;
+
+signal sample_cycles : std_logic_vector(15 downto 0) := x"0400";
+signal minon_cycles : std_logic_vector(15 downto 0) := x"0400";
+
+
 begin
 
-   pll0: pll port map(
-	   refclk => clkin,
-	   rst => reset,
---      outclk_0 => c0,
-      locked => plllocked
-   );
-
-   c0 <= clkin; 
+   have_rh <= 0; have_rl <= 0; have_rk <= 1;
 
    pdp11: unibus port map(
-      addr => addr,
-      dati => dati,
-      dato => dato,
-      control_dati => control_dati,
-      control_dato => control_dato,
-      control_datob => control_datob,
-      addr_match => dram_match,
+      modelcode => 70,
 
-      ifetch => ifetch,
-      iwait => iwait,
+      have_kl11 => 2,
+      tx0 => txtx,
+      rx0 => rxrx,
+      cts0 => cts,
+      rts0 => rts,
+      kl0_bps => 9600,
+      kl0_force7bit => 1,
+      kl0_rtscts => 0,
+
+      tx1 => txtx1,
+      rx1 => rxrx1,
+      kl1_bps => 9600,
+      kl1_force7bit => 1,
 
       have_rl => have_rl,
       have_rl_debug => 1,
@@ -376,34 +511,104 @@ begin
       rh_sdcard_miso => rh_miso,
       rh_sdcard_debug => rh_sddebug,
 
-      have_kl11 => 1,
-		kl0_force7bit => 1,
-      rx0 => rxrx1,
-      tx0 => txtx1,
---      rx1 => rxrx1,
---      tx1 => txtx1,
---      cts1 => cts1,
---      rts1 => rts1,
---      kl1_rtscts => 1,
---      kl1_bps => 38400,
-
-      have_xu => 0,
+      have_xu => 1,
       xu_cs => xu_cs,
       xu_mosi => xu_mosi,
       xu_sclk => xu_sclk,
       xu_miso => xu_miso,
       xu_debug_tx => xu_debug_tx,
 
-      console_switches => console_switches,
-      console_displays => console_displays,
+      cons_load => cons_load,
+      cons_exa => cons_exa,
+      cons_dep => cons_dep,
+      cons_cont => cons_cont,
+      cons_ena => cons_ena,
+      cons_start => cons_start,
+      cons_sw => cons_sw,
+      cons_adss_mode => cons_adss_mode,
+      cons_adss_id => cons_adss_id,
+      cons_adss_cons => cons_adss_cons,
 
-      modelcode => 70,
+      cons_consphy => cons_consphy,
+      cons_progphy => cons_progphy,
+      cons_shfr => cons_shfr,
+      cons_maddr => cons_maddr,
+      cons_br => cons_br,
+      cons_dr => cons_dr,
+      cons_parh => cons_parh,
+      cons_parl => cons_parl,
+
+      cons_adrserr => cons_adrserr,
+      cons_run => cons_run,
+      cons_pause => cons_pause,
+      cons_master => cons_master,
+      cons_kernel => cons_kernel,
+      cons_super => cons_super,
+      cons_user => cons_user,
+      cons_id => cons_id,
+      cons_map16 => cons_map16,
+      cons_map18 => cons_map18,
+      cons_map22 => cons_map22,
+
+      addr => addr,
+      dati => dati,
+      dato => dato,
+      control_dati => control_dati,
+      control_dato => control_dato,
+      control_datob => control_datob,
+      addr_match => dram_match,
+
+      ifetch => ifetch,
+      iwait => iwait,
 
       reset => cpureset,
       clk50mhz => clkin,
       clk => cpuclk
    );
 
+   panel: paneldriver port map(
+      panel_xled => panel_xled,
+      panel_col => panel_col,
+      panel_row => panel_row,
+
+      cons_load => cons_load,
+      cons_exa => cons_exa,
+      cons_dep => cons_dep,
+      cons_cont => cons_cont,
+      cons_ena => cons_ena,
+      cons_start => cons_start,
+      cons_sw => cons_sw,
+      cons_adss_mode => cons_adss_mode,
+      cons_adss_id => cons_adss_id,
+      cons_adss_cons => cons_adss_cons,
+
+      cons_consphy => cons_consphy,
+      cons_progphy => cons_progphy,
+      cons_shfr => cons_shfr,
+      cons_maddr => cons_maddr,
+      cons_br => cons_br,
+      cons_dr => cons_dr,
+      cons_parh => cons_parh,
+      cons_parl => cons_parl,
+
+      cons_adrserr => cons_adrserr,
+      cons_run => cons_run,
+      cons_pause => cons_pause,
+      cons_master => cons_master,
+      cons_kernel => cons_kernel,
+      cons_super => cons_super,
+      cons_user => cons_user,
+      cons_id => cons_id,
+      cons_map16 => cons_map16,
+      cons_map18 => cons_map18,
+      cons_map22 => cons_map22,
+
+      sample_cycles => sample_cycles,
+      minon_cycles => minon_cycles,
+
+      clkin => cpuclk,
+      reset => cpureset
+   );
 --   vt0: vt port map(
 --      vga_hsync => vga_hsync,
 --      vga_vsync => vga_vsync,
@@ -419,6 +624,15 @@ begin
 --      clk50mhz => clkin,
 --      reset => vtreset
 --   );
+
+   pll0: pll port map(
+	   refclk => clkin,
+	   rst => c0_reset,
+      outclk_0 => c0,
+      locked => c0_locked
+   );
+
+--   c0 <= clkin;
 
    ssegd5: ssegdecoder port map(
       i => "0" & addrq(17 downto 15),
@@ -454,22 +668,15 @@ begin
    clkout <= cpuclk;
    clkout2 <= c0;
 	pod(0) <= control_dati;
-	pod(1) <= c0;
-	pod(2) <= cpuclk;
+	pod(1) <= control_dato;
+	pod(2) <= control_datob;
 	pod(3) <= ifetch;
-	pod(4) <= dram_dq(0);
-	pod(5) <= dram_dq(1);
-	pod(6) <= we_n;
-	pod(7) <= cs_n;
+	pod(7 downto 4) <= cons_dr(3 downto 0);
 
-	dram_we_n <= we_n; 
-	dram_cs_n <= cs_n;
-	
-   reset <= (not resetbtn) ; -- or power_on_reset;
+   redled <= not ps2k_c & not ps2k_d & ifetch & not rxrx & not txtx1 & not rxrx1 & sddebug;
 
-   redled <= not ps2k_c & not ps2k_d & ifetch & not rxrx0 & not txtx1 & not rxrx1 & sddebug;
-   console_switches <= "0000000000000000";
-
+   tx <= txtx;
+   rxrx <= rx;
    tx1 <= txtx1;
    rxrx1 <= rx1;
 
@@ -490,18 +697,25 @@ begin
    dram_match <= '1' when addr(21 downto 18) /= "1111" else '0';
    dram_cke <= '1';
    dram_clk <= c0;
-	
-   have_rh <= 1; have_rl <= 0; have_rk <= 0;
+   reset <= '1' when resetbutton = '0' or c0_locked = '0' else '0';
+
+   process(clkin)
+   begin
+      if clkin='1' and clkin'event then
+         c0_reset <= '0';
+      end if;
+   end process;
 
    process(c0)
    begin
       if c0='1' and c0'event then
-         if slowreset = '1' then
+
+         if reset = '1' then
             dram_fsm <= dram_init;
-            cs_n <= '0';
+            dram_cs_n <= '0';
             dram_ras_n <= '1';
             dram_cas_n <= '1';
-            we_n <= '1';
+            dram_we_n <= '1';
             dram_addr <= (others => '0');
 
             dram_udqm <= '1';
@@ -514,19 +728,14 @@ begin
             cpuresetlength <= 63;
             dram_refresh_count <= 1;
          else
-			
-				if button1 = '0' then
-					cpuresetlength <= 63;
-					cpureset <= '1';
-				end if;
 
             case dram_fsm is
 
                when dram_init =>
-                  cs_n <= '0';
+                  dram_cs_n <= '0';
                   dram_ras_n <= '1';
                   dram_cas_n <= '1';
-                  we_n <= '1';
+                  dram_we_n <= '1';
                   dram_addr <= (others => '0');
 
                   dram_udqm <= '1';
@@ -535,15 +744,15 @@ begin
                   dram_ba_0 <= '0';
 
                   cpureset <= '1';
-                  cpuresetlength <= 8;
+                  cpuresetlength <= 63;
                   dram_counter <= 32767;
                   dram_fsm <= dram_poweron;
 
                when dram_poweron =>
-                  cs_n <= '0';
+                  dram_cs_n <= '0';
                   dram_ras_n <= '1';
                   dram_cas_n <= '1';
-                  we_n <= '1';
+                  dram_we_n <= '1';
                   dram_addr <= (others => '0');
 
                   dram_udqm <= '1';
@@ -558,10 +767,10 @@ begin
                   end if;
 
                when dram_pwron_pre =>
-                  cs_n <= '0';
+                  dram_cs_n <= '0';
                   dram_ras_n <= '0';
                   dram_cas_n <= '1';
-                  we_n <= '0';
+                  dram_we_n <= '0';
                   dram_addr(10) <= '1';
 
                   dram_udqm <= '1';
@@ -576,7 +785,7 @@ begin
                   dram_fsm <= dram_pwron_prew;
 
                when dram_pwron_prew =>
-                  cs_n <= '1';
+                  dram_cs_n <= '1';
                   if dram_wait = 0 then
                      dram_fsm <= dram_pwron_ref;
                      dram_counter <= 20;
@@ -585,10 +794,10 @@ begin
                   end if;
 
                when dram_pwron_ref =>
-                  cs_n <= '0';
+                  dram_cs_n <= '0';
                   dram_ras_n <= '0';
                   dram_cas_n <= '0';
-                  we_n <= '1';
+                  dram_we_n <= '1';
                   dram_addr <= (others => '0');
 
                   dram_udqm <= '1';
@@ -600,7 +809,7 @@ begin
                   dram_fsm <= dram_pwron_refw;
 
                when dram_pwron_refw =>
-                  cs_n <= '1';
+                  dram_cs_n <= '1';
                   if dram_wait = 0 then
                      if dram_counter = 0 then
                         dram_fsm <= dram_pwron_mrs;
@@ -613,13 +822,13 @@ begin
                   end if;
 
                when dram_pwron_mrs =>
-                  cs_n <= '0';
+                  dram_cs_n <= '0';
                   dram_ras_n <= '0';
                   dram_cas_n <= '0';
-                  we_n <= '0';
+                  dram_we_n <= '0';
 
                   dram_addr(12 downto 7) <= (others => '0');
-                  dram_addr(6 downto 4) <= "010";          -- cas length 3
+                  dram_addr(6 downto 4) <= "011";          -- cas length 3
                   dram_addr(3) <= '0';                     -- sequential
                   dram_addr(2 downto 0) <= "000";          -- length 0
 
@@ -632,7 +841,7 @@ begin
                   dram_fsm <= dram_pwron_mrsw;
 
                when dram_pwron_mrsw =>
-                  cs_n <= '1';
+                  dram_cs_n <= '1';
                   if dram_wait = 0 then
                      dram_fsm <= dram_idle;
                   else
@@ -640,10 +849,10 @@ begin
                   end if;
 
                when dram_idle =>
-                  cs_n <= '1';
+                  dram_cs_n <= '1';
                   dram_ras_n <= '1';
                   dram_cas_n <= '1';
-                  we_n <= '1';
+                  dram_we_n <= '1';
                   dram_addr(10) <= '0';
 
                   dram_udqm <= '1';
@@ -658,24 +867,25 @@ begin
 
                when dram_c1 =>
 
-               cpuclk <= '1'; 
-
                   if cpuresetlength = 0 then
                      cpureset <= '0';
                   else
                      cpuresetlength <= cpuresetlength - 1;
                   end if;
+
+               cpuclk <= '1';
+
                   dram_fsm <= dram_c2;
 
                when dram_c2 =>
                   dram_dq <= (others => 'Z');
-                  dram_fsm <= dram_c6;
+                  dram_fsm <= dram_c3;
 
                when dram_c3 =>
-                  dram_fsm <= dram_c6;         -- 6, for more agressive timing
+                  dram_fsm <= dram_c4;         -- 5, for more agressive timing
 
                when dram_c4 =>
-                  dram_fsm <= dram_c6;
+                  dram_fsm <= dram_c5;
 
                when dram_c5 =>
                   dram_fsm <= dram_c6;
@@ -688,10 +898,10 @@ begin
 
                   if dram_match = '1' and control_dati = '1' then
                      -- activate command
-                     cs_n <= '0';
+                     dram_cs_n <= '0';
                      dram_ras_n <= '0';
                      dram_cas_n <= '1';
-                     we_n <= '1';
+                     dram_we_n <= '1';
                      dram_addr(12) <= '0';
                      dram_addr(11 downto 0) <= addr(20 downto 9);
 
@@ -704,10 +914,10 @@ begin
                   -- write, t1-t2
                   if dram_match = '1' and control_dato = '1' then
                      -- activate command
-                     cs_n <= '0';
+                     dram_cs_n <= '0';
                      dram_ras_n <= '0';
                      dram_cas_n <= '1';
-                     we_n <= '1';
+                     dram_we_n <= '1';
                      dram_addr(12) <= '0';
                      dram_addr(11 downto 0) <= addr(20 downto 9);
 
@@ -720,10 +930,10 @@ begin
                   if dram_match = '0' or (control_dato = '0' and control_dati = '0') then
                      -- auto refresh command
                      if dram_refresh_count = 0 then
-                        cs_n <= '0';
+                        dram_cs_n <= '0';
                         dram_ras_n <= '0';
                         dram_cas_n <= '0';
-                        we_n <= '1';
+                        dram_we_n <= '1';
                         dram_refresh_count <= 255;
                      else
                         dram_refresh_count <= dram_refresh_count - 1;
@@ -734,10 +944,10 @@ begin
 
                when dram_c7 =>
                   -- t2-t3 - set nop command
-                  cs_n <= '1';
+                  dram_cs_n <= '1';
                   dram_ras_n <= '1';
                   dram_cas_n <= '1';
-                  we_n <= '1';
+                  dram_we_n <= '1';
 
                   dram_fsm <= dram_c8;
 
@@ -746,10 +956,10 @@ begin
                   -- read, t3-t4
                   if dram_match = '1' and control_dati = '1' then
                      -- reada command
-                     cs_n <= '0';
+                     dram_cs_n <= '0';
                      dram_ras_n <= '1';
                      dram_cas_n <= '0';
-                     we_n <= '1';
+                     dram_we_n <= '1';
                      dram_addr(12) <= '0';
                      dram_addr(11) <= '0';
                      dram_addr(10) <= '1';
@@ -766,10 +976,10 @@ begin
                   -- write, t3-t4
                   if dram_match = '1' and control_dato = '1' then
                      -- writea command
-                     cs_n <= '0';
+                     dram_cs_n <= '0';
                      dram_ras_n <= '1';
                      dram_cas_n <= '0';
-                     we_n <= '0';
+                     dram_we_n <= '0';
                      dram_addr(12) <= '0';
                      dram_addr(11) <= '0';
                      dram_addr(10) <= '1';
@@ -789,36 +999,36 @@ begin
                      dram_ba_0 <= addr(21);
                      dram_dq <= dato;
                   end if;
-						
-						cpuclk <= '0';
 
                   dram_fsm <= dram_c9;
+
+               cpuclk <= '0';
 
                when dram_c9 =>
 
                   -- read/write, t4-t5 - set nop command and deselect
-                  cs_n <= '1';
+                  dram_cs_n <= '1';
                   dram_ras_n <= '1';
                   dram_cas_n <= '1';
-                  we_n <= '1';
+                  dram_we_n <= '1';
 
                   dram_fsm <= dram_c10;
 
                when dram_c10 =>
-                  dram_fsm <= dram_c12;
+                  dram_fsm <= dram_c11;
 
                when dram_c11 =>
                   dram_fsm <= dram_c12;
 
                when dram_c12 =>
+                  dram_fsm <= dram_c13;
+
+               when dram_c13 =>
                   -- read, t5-t6
                   if dram_match = '1' and control_dati = '1' then
                      dati <= dram_dq;
                   end if;
-                  dram_fsm <= dram_c1;
-
-               when dram_c13 =>
-                  dram_fsm <= dram_c1;
+                  dram_fsm <= dram_c14;
 
                when dram_c14 =>
                   dram_fsm <= dram_c1;
@@ -826,28 +1036,8 @@ begin
                when others =>
                   null;
 
-            end case;				
+            end case;
 
-         end if;
-      end if;
-   end process;
-
-   process (c0)
-   begin
-      if c0='1' and c0'event then
-         if reset = '1' then
-            slowreset <= '1';
-            slowresetdelay <= 4095;
-         else
-            if slowresetdelay = 0 then
-               slowreset <= '0';
-               vtreset <= '0';
-            else
-               if plllocked = '1' then
-                  slowreset <= '1';
-                  slowresetdelay <= slowresetdelay - 1;
-               end if;
-            end if;
          end if;
       end if;
    end process;

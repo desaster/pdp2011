@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.159 $
+-- $Revision: 1.162 $
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -21,44 +21,34 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity top is
    port(
-      greenled : out std_logic_vector(8 downto 0);
-      redled : out std_logic_vector(17 downto 0);
-
-      sseg7 : out std_logic_vector(6 downto 0);
-      sseg7dp : out std_logic;
-      sseg6 : out std_logic_vector(6 downto 0);
-      sseg6dp : out std_logic;
-      sseg5 : out std_logic_vector(6 downto 0);
-      sseg5dp : out std_logic;
-      sseg4 : out std_logic_vector(6 downto 0);
-      sseg4dp : out std_logic;
-      sseg3 : out std_logic_vector(6 downto 0);
-      sseg3dp : out std_logic;
-      sseg2 : out std_logic_vector(6 downto 0);
-      sseg2dp : out std_logic;
-      sseg1 : out std_logic_vector(6 downto 0);
-      sseg1dp : out std_logic;
-      sseg0 : out std_logic_vector(6 downto 0);
-      sseg0dp : out std_logic;
-
-      clkin : in std_logic;
-
-      sw : in std_logic_vector(17 downto 0);
-
-      tx : out std_logic;
+      -- console serial port
       rx : in std_logic;
+      tx : out std_logic;
+      cts : in std_logic;
+      rts : out std_logic;
+      -- second serial port
+      rx1: in std_logic;
+      tx1: out std_logic;
 
+      -- sd card
       sdcard_cs : out std_logic;
       sdcard_mosi : out std_logic;
       sdcard_sclk : out std_logic;
       sdcard_miso : in std_logic;
 
--- ethernet, enc424j600 controller interface
+      -- enc424j600 backend for xu
       xu_cs : out std_logic;
       xu_mosi : out std_logic;
       xu_sclk : out std_logic;
       xu_miso : in std_logic;
+      xu_debug_tx : out std_logic;
 
+      -- pidp11 console
+      panel_xled : out std_logic_vector(5 downto 0);
+      panel_col : inout std_logic_vector(11 downto 0);
+      panel_row : out std_logic_vector(2 downto 0);
+
+      -- ssram
       sram_addr : out std_logic_vector(18 downto 0);
       sram_dq : inout std_logic_vector(31 downto 0);
       sram_adsc_n : out std_logic;
@@ -80,14 +70,34 @@ entity top is
       sram_oe_n : out std_logic;
       sram_we_n : out std_logic;
 
-      clkout : out std_logic;
-      clkout2 : out std_logic;
-      pod : out std_logic_vector(7 downto 0);
+      -- board peripherals
+      greenled : out std_logic_vector(8 downto 0);
+      redled : out std_logic_vector(17 downto 0);
+
+      sseg7 : out std_logic_vector(6 downto 0);
+      sseg7dp : out std_logic;
+      sseg6 : out std_logic_vector(6 downto 0);
+      sseg6dp : out std_logic;
+      sseg5 : out std_logic_vector(6 downto 0);
+      sseg5dp : out std_logic;
+      sseg4 : out std_logic_vector(6 downto 0);
+      sseg4dp : out std_logic;
+      sseg3 : out std_logic_vector(6 downto 0);
+      sseg3dp : out std_logic;
+      sseg2 : out std_logic_vector(6 downto 0);
+      sseg2dp : out std_logic;
+      sseg1 : out std_logic_vector(6 downto 0);
+      sseg1dp : out std_logic;
+      sseg0 : out std_logic_vector(6 downto 0);
+      sseg0dp : out std_logic;
+
+      sw : in std_logic_vector(17 downto 0);
 
       key3 : in std_logic;
       key2 : in std_logic;
       key1 : in std_logic;
-      key0 : in std_logic
+      key0 : in std_logic;
+      clkin : in std_logic
    );
 end top;
 
@@ -255,6 +265,52 @@ component unibus is
    );
 end component;
 
+component paneldriver is
+   port(
+      panel_xled : out std_logic_vector(5 downto 0);
+      panel_col : inout std_logic_vector(11 downto 0);
+      panel_row : out std_logic_vector(2 downto 0);
+
+      cons_load : out std_logic;
+      cons_exa : out std_logic;
+      cons_dep : out std_logic;
+      cons_cont : out std_logic;
+      cons_ena : out std_logic;
+      cons_inst : out std_logic;
+      cons_start : out std_logic;
+      cons_sw : out std_logic_vector(21 downto 0);
+      cons_adss_mode : out std_logic_vector(1 downto 0);
+      cons_adss_id : out std_logic;
+      cons_adss_cons : out std_logic;
+
+      cons_consphy : in std_logic_vector(21 downto 0);
+      cons_progphy : in std_logic_vector(21 downto 0);
+      cons_shfr : in std_logic_vector(15 downto 0);
+      cons_maddr : in std_logic_vector(15 downto 0);                 -- microcode address fpu/cpu
+      cons_br : in std_logic_vector(15 downto 0);
+      cons_dr : in std_logic_vector(15 downto 0);
+      cons_parh : in std_logic;
+      cons_parl : in std_logic;
+
+      cons_adrserr : in std_logic;
+      cons_run : in std_logic;
+      cons_pause : in std_logic;
+      cons_master : in std_logic;
+      cons_kernel : in std_logic;
+      cons_super : in std_logic;
+      cons_user : in std_logic;
+      cons_id : in std_logic;
+      cons_map16 : in std_logic;
+      cons_map18 : in std_logic;
+      cons_map22 : in std_logic;
+
+      sample_cycles : in std_logic_vector(15 downto 0) := x"0400";
+      minon_cycles : in std_logic_vector(15 downto 0) := x"0400";
+
+      clkin : in std_logic;
+      reset : in std_logic
+   );
+end component;
 
 component ssegdecoder is
 	port(
@@ -269,12 +325,6 @@ component pll is
       inclk0 : in std_logic  := '0';
       c0 : out std_logic
    );
-end component;
-
-component issp
-	port(
-		source : out std_logic_vector(21 downto 0)
-	);
 end component;
 
 
@@ -294,23 +344,46 @@ type clk_fsm_type is (
 signal clk_fsm : clk_fsm_type := clk_idle;
 
 
-signal cpuclk : std_logic;
-signal cpureset : std_logic;
+signal power_on_reset : std_logic := '1';
+
+signal c0 : std_logic;
+
+signal reset : std_logic;
+signal cpuclk : std_logic := '0';
+signal cpureset : std_logic := '1';
 signal cpuresetlength : integer range 0 to 4095 := 4095;
+signal slowreset : std_logic;
+signal slowresetdelay : integer range 0 to 4095 := 4095;
 
 signal ifetch: std_logic;
 signal iwait: std_logic;
-signal reset: std_logic;
 signal txtx : std_logic;
 signal rxrx : std_logic;
+signal txtx1 : std_logic;
+signal rxrx1 : std_logic;
 
-signal cont : std_logic;
-signal ena : std_logic;
-signal load : std_logic;
-signal start : std_logic;
-signal cons_addr: std_logic_vector(21 downto 0);
-signal cons_data: std_logic_vector(15 downto 0);
-signal cons_sw : std_logic_vector(21 downto 0);
+signal have_rl : integer range 0 to 1;
+signal rl_cs : std_logic;
+signal rl_mosi : std_logic;
+signal rl_miso : std_logic;
+signal rl_sclk : std_logic;
+signal rl_sddebug : std_logic_vector(3 downto 0);
+
+signal have_rk : integer range 0 to 1;
+signal rk_cs : std_logic;
+signal rk_mosi : std_logic;
+signal rk_miso : std_logic;
+signal rk_sclk : std_logic;
+signal rk_sddebug : std_logic_vector(3 downto 0);
+
+signal have_rh : integer range 0 to 1;
+signal rh_cs : std_logic;
+signal rh_mosi : std_logic;
+signal rh_miso : std_logic;
+signal rh_sclk : std_logic;
+signal rh_sddebug : std_logic_vector(3 downto 0);
+
+signal sddebug : std_logic_vector(3 downto 0);
 
 signal addr : std_logic_vector(21 downto 0);
 signal addrq : std_logic_vector(21 downto 0);
@@ -320,21 +393,45 @@ signal control_dati : std_logic;
 signal control_dato : std_logic;
 signal control_datob : std_logic;
 
-signal rh_cs : std_logic;
-signal rh_mosi : std_logic;
-signal rh_miso : std_logic;
-signal rh_sclk : std_logic;
-signal rh_sddebug : std_logic_vector(3 downto 0);
-
-signal sddebug : std_logic_vector(3 downto 0);
-
 signal sram_match : std_logic;
 signal sram_ce_n : std_logic;
 signal data_valid : std_logic;
 
-signal power_on_reset : std_logic := '1';
+signal cons_load : std_logic;
+signal cons_exa : std_logic;
+signal cons_dep : std_logic;
+signal cons_cont : std_logic;
+signal cons_ena : std_logic;
+signal cons_start : std_logic;
+signal cons_sw : std_logic_vector(21 downto 0);
+signal cons_adss_mode : std_logic_vector(1 downto 0);
+signal cons_adss_id : std_logic;
+signal cons_adss_cons : std_logic;
 
-signal c0 : std_logic;
+signal cons_consphy : std_logic_vector(21 downto 0);
+signal cons_progphy : std_logic_vector(21 downto 0);
+signal cons_br : std_logic_vector(15 downto 0);
+signal cons_shfr : std_logic_vector(15 downto 0);
+signal cons_maddr : std_logic_vector(15 downto 0);
+signal cons_dr : std_logic_vector(15 downto 0);
+signal cons_parh : std_logic;
+signal cons_parl : std_logic;
+
+signal cons_adrserr : std_logic;
+signal cons_run : std_logic;
+signal cons_pause : std_logic;
+signal cons_master : std_logic;
+signal cons_kernel : std_logic;
+signal cons_super : std_logic;
+signal cons_user : std_logic;
+signal cons_id : std_logic;
+signal cons_map16 : std_logic;
+signal cons_map18 : std_logic;
+signal cons_map22 : std_logic;
+
+signal sample_cycles : std_logic_vector(15 downto 0) := x"0400";
+signal minon_cycles : std_logic_vector(15 downto 0) := x"0400";
+
 
 begin
 
@@ -345,11 +442,88 @@ begin
 
 --   c0 <= clkin;
 
-	issp0: issp port map(
-		source => cons_sw
-	);
+   have_rh <= 1; have_rl <= 0; have_rk <= 0;
 
    pdp11: unibus port map(
+      modelcode => 70, 
+
+      have_kl11 => 1,
+      tx0 => txtx,
+      rx0 => rxrx,
+      cts0 => cts,
+      rts0 => rts,
+      kl0_bps => 9600,
+      kl0_force7bit => 1,
+      kl0_rtscts => 0,
+
+      tx1 => txtx1,
+      rx1 => rxrx1,
+      kl1_bps => 9600,
+      kl1_force7bit => 1,
+
+      have_rl => have_rl,
+      have_rl_debug => 1,
+      rl_sdcard_cs => rl_cs,
+      rl_sdcard_mosi => rl_mosi,
+      rl_sdcard_sclk => rl_sclk,
+      rl_sdcard_miso => rl_miso,
+      rl_sdcard_debug => rl_sddebug,
+
+      have_rk => have_rk,
+      have_rk_debug => 1,
+      rk_sdcard_cs => rk_cs,
+      rk_sdcard_mosi => rk_mosi,
+      rk_sdcard_sclk => rk_sclk,
+      rk_sdcard_miso => rk_miso,
+      rk_sdcard_debug => rk_sddebug,
+
+      have_rh => have_rh,
+      have_rh_debug => 1,
+      rh_sdcard_cs => rh_cs,
+      rh_sdcard_mosi => rh_mosi,
+      rh_sdcard_sclk => rh_sclk,
+      rh_sdcard_miso => rh_miso,
+      rh_sdcard_debug => rh_sddebug,
+
+      have_xu => 0,
+      xu_cs => xu_cs,
+      xu_mosi => xu_mosi,
+      xu_sclk => xu_sclk,
+      xu_miso => xu_miso,
+      xu_debug_tx => xu_debug_tx,
+
+      cons_load => cons_load,
+      cons_exa => cons_exa,
+      cons_dep => cons_dep,
+      cons_cont => cons_cont,
+      cons_ena => cons_ena,
+      cons_start => cons_start,
+      cons_sw => cons_sw,
+      cons_adss_mode => cons_adss_mode,
+      cons_adss_id => cons_adss_id,
+      cons_adss_cons => cons_adss_cons,
+
+      cons_consphy => cons_consphy,
+      cons_progphy => cons_progphy,
+      cons_shfr => cons_shfr,
+      cons_maddr => cons_maddr,
+      cons_br => cons_br,
+      cons_dr => cons_dr,
+      cons_parh => cons_parh,
+      cons_parl => cons_parl,
+
+      cons_adrserr => cons_adrserr,
+      cons_run => cons_run,
+      cons_pause => cons_pause,
+      cons_master => cons_master,
+      cons_kernel => cons_kernel,
+      cons_super => cons_super,
+      cons_user => cons_user,
+      cons_id => cons_id,
+      cons_map16 => cons_map16,
+      cons_map18 => cons_map18,
+      cons_map22 => cons_map22,
+
       addr => addr,
       dati => dati,
       dato => dato,
@@ -361,47 +535,52 @@ begin
       ifetch => ifetch,
       iwait => iwait,
 
-      have_rl => 1,
-      rl_sdcard_cs => rh_cs,
-      rl_sdcard_mosi => rh_mosi,
-      rl_sdcard_sclk => rh_sclk,
-      rl_sdcard_miso => rh_miso,
-      rl_sdcard_debug => rh_sddebug,
-
-      have_xu => 0,
-      xu_cs => xu_cs,
-      xu_mosi => xu_mosi,
-      xu_sclk => xu_sclk,
-      xu_miso => xu_miso,
-
-      rx0 => rx,
-      tx0 => txtx,
-      kl0_force7bit => 1,
-
-      modelcode => 70,
-
-      cons_sw => cons_sw,
-
-      cons_ena => (not sw(0)),
---
-      cons_load => (not key3),
-  		cons_exa => (not key2),
-      cons_cont => (not key1),
---       cons_dep => (not key0),
---
-      cons_progphy => cons_addr,
-      cons_shfr => cons_data,
---
- 		cons_kernel => greenled(7),
- 		cons_super => greenled(6),
- 		cons_user => greenled(5),
- 		cons_map22 => greenled(4),
- 		cons_map18 => greenled(3),
- 		cons_map16 => greenled(2),
- 		cons_id => greenled(1),
-
-      clk => cpuclk,
+      reset => cpureset,
       clk50mhz => clkin,
+      clk => cpuclk
+   );
+
+   panel: paneldriver port map(
+      panel_xled => panel_xled,
+      panel_col => panel_col,
+      panel_row => panel_row,
+
+      cons_load => cons_load,
+      cons_exa => cons_exa,
+      cons_dep => cons_dep,
+      cons_cont => cons_cont,
+      cons_ena => cons_ena,
+      cons_start => cons_start,
+      cons_sw => cons_sw,
+      cons_adss_mode => cons_adss_mode,
+      cons_adss_id => cons_adss_id,
+      cons_adss_cons => cons_adss_cons,
+
+      cons_consphy => cons_consphy,
+      cons_progphy => cons_progphy,
+      cons_shfr => cons_shfr,
+      cons_maddr => cons_maddr,
+      cons_br => cons_br,
+      cons_dr => cons_dr,
+      cons_parh => cons_parh,
+      cons_parl => cons_parl,
+
+      cons_adrserr => cons_adrserr,
+      cons_run => cons_run,
+      cons_pause => cons_pause,
+      cons_master => cons_master,
+      cons_kernel => cons_kernel,
+      cons_super => cons_super,
+      cons_user => cons_user,
+      cons_id => cons_id,
+      cons_map16 => cons_map16,
+      cons_map18 => cons_map18,
+      cons_map22 => cons_map22,
+
+      sample_cycles => sample_cycles,
+      minon_cycles => minon_cycles,
+
+      clkin => cpuclk,
       reset => cpureset
    );
 
@@ -456,8 +635,8 @@ begin
    sseg1dp <= '1';
    sseg0dp <= '1';
 
-   redled <= "00" & cons_data;
-   addrq <= cons_addr;
+   redled <= "00" & cons_dr;
+   addrq <= cons_consphy;
 --   console_switches <= sw(15 downto 0);
 
    greenled(8) <= ifetch;
@@ -465,23 +644,16 @@ begin
 
    tx <= txtx;
    rxrx <= rx;
+   tx1 <= txtx1;
+   rxrx1 <= rx1;
 
-   clkout <= cpuclk;
-   clkout2 <= cpuclk;
-   pod(0) <= ifetch;
-   pod(1) <= control_dati;
-   pod(2) <= control_dato;
-   pod(3) <= sram_ce_n;
-   pod(4) <= sram_dq(0);
-   pod(5) <= sram_dq(1);
-   pod(6) <= sram_dq(2);
-   pod(7) <= sram_dq(3);
-
-   sddebug <= rh_sddebug;
-   sdcard_cs <= rh_cs;
-   sdcard_mosi <= rh_mosi;
-   sdcard_sclk <= rh_sclk;
+   sddebug <= rh_sddebug when have_rh = 1 else rl_sddebug when have_rl = 1 else rk_sddebug;
+   sdcard_cs <= rh_cs when have_rh = 1 else rl_cs when have_rl = 1 else rk_cs;
+   sdcard_mosi <= rh_mosi when have_rh = 1 else rl_mosi when have_rl = 1 else rk_mosi;
+   sdcard_sclk <= rh_sclk when have_rh = 1 else rl_sclk when have_rl = 1 else rk_sclk;
    rh_miso <= sdcard_miso;
+   rl_miso <= sdcard_miso;
+   rk_miso <= sdcard_miso;
 
    sram_match <= '1' when addr(21) = '0' else '0';
    sram_addr <= addr(20 downto 2);

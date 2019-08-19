@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.90 $
+-- $Revision: 1.94 $
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -621,10 +621,10 @@ component rh11 is
 
       have_rh : in integer range 0 to 1 := 0;
       have_rh70 : in integer range 0 to 1 := 0;
-      have_rh_debug : in integer range 0 to 1 := 1;
       rmtype : in integer range 4 to 7 := 6;
       reset : in std_logic;
-      sdclock : in std_logic;
+      clk50mhz : in std_logic;
+      nclk : in std_logic;
       clk : in std_logic
    );
 end component;
@@ -1466,13 +1466,12 @@ begin
       sdcard_miso => rh_sdcard_miso,
       sdcard_debug => rh_sdcard_debug,
 
-      sdclock => clk,
-
       have_rh => have_rh,
       have_rh70 => have_rh70,
-      have_rh_debug => have_rh_debug,
       reset => cpu_init,
-      clk => nclk
+      clk50mhz => clk50mhz,
+      nclk => nclk,
+      clk => clk
    );
 
    xu0: xu port map(

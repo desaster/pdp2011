@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.42 $
+-- $Revision: 1.43 $
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -21,47 +21,35 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity top is
    port(
-      greenled : out std_logic_vector(7 downto 0);
-      redled : out std_logic_vector(9 downto 0);
-
-      sseg3 : out std_logic_vector(6 downto 0);
-      sseg2 : out std_logic_vector(6 downto 0);
-      sseg1 : out std_logic_vector(6 downto 0);
-      sseg0 : out std_logic_vector(6 downto 0);
-
-      vgar : out std_logic_vector(3 downto 0);
-      vgag : out std_logic_vector(3 downto 0);
-      vgab : out std_logic_vector(3 downto 0);
-      vgah : out std_logic;
-      vgav : out std_logic;
-
-      clkin : in std_logic;
-
-      sw : in std_logic_vector(9 downto 0);
-
-      dclk1, dclk2 : out std_logic;
-
-      dd3 : out std_logic_vector(7 downto 0);
-      dd2 : out std_logic_vector(7 downto 0);
-      dd1 : out std_logic_vector(7 downto 0);
-      dd0 : out std_logic_vector(7 downto 0);
-
-      tx : out std_logic;
+      -- console serial port
       rx : in std_logic;
+      tx : out std_logic;
+      cts : in std_logic;
+      rts : out std_logic;
+      -- second serial port
+      rx1: in std_logic;
+      tx1: out std_logic;
 
+      -- sd card
       sdcard_cs : out std_logic;
       sdcard_mosi : out std_logic;
       sdcard_sclk : out std_logic;
       sdcard_miso : in std_logic;
 
--- ethernet, enc424j600 controller interface
+      -- enc424j600 backend for xu
       xu_cs : out std_logic;
       xu_mosi : out std_logic;
       xu_sclk : out std_logic;
       xu_miso : in std_logic;
-      xu_int : in std_logic;
+      xu_debug_tx : out std_logic;
 
-      dram_addr : out std_logic_vector(11 downto 0);
+      -- pidp11 console
+      panel_xled : out std_logic_vector(5 downto 0);
+      panel_col : inout std_logic_vector(11 downto 0);
+      panel_row : out std_logic_vector(2 downto 0);
+
+      -- dram
+      dram_addr : out std_logic_vector(12 downto 0);
       dram_dq : inout std_logic_vector(15 downto 0);
       dram_ba_1 : out std_logic;
       dram_ba_0 : out std_logic;
@@ -74,7 +62,18 @@ entity top is
       dram_we_n : out std_logic;
       dram_cs_n : out std_logic;
 
-      resetbtn : in std_logic
+      -- board peripherals
+      greenled : out std_logic_vector(7 downto 0);
+      redled : out std_logic_vector(9 downto 0);
+      sw : in std_logic_vector(9 downto 0);
+
+      sseg3 : out std_logic_vector(6 downto 0);
+      sseg2 : out std_logic_vector(6 downto 0);
+      sseg1 : out std_logic_vector(6 downto 0);
+      sseg0 : out std_logic_vector(6 downto 0);
+
+      resetbtn : in std_logic;
+      clkin : in std_logic
    );
 end top;
 
@@ -242,6 +241,53 @@ component unibus is
    );
 end component;
 
+component paneldriver is
+   port(
+      panel_xled : out std_logic_vector(5 downto 0);
+      panel_col : inout std_logic_vector(11 downto 0);
+      panel_row : out std_logic_vector(2 downto 0);
+
+      cons_load : out std_logic;
+      cons_exa : out std_logic;
+      cons_dep : out std_logic;
+      cons_cont : out std_logic;
+      cons_ena : out std_logic;
+      cons_inst : out std_logic;
+      cons_start : out std_logic;
+      cons_sw : out std_logic_vector(21 downto 0);
+      cons_adss_mode : out std_logic_vector(1 downto 0);
+      cons_adss_id : out std_logic;
+      cons_adss_cons : out std_logic;
+
+      cons_consphy : in std_logic_vector(21 downto 0);
+      cons_progphy : in std_logic_vector(21 downto 0);
+      cons_shfr : in std_logic_vector(15 downto 0);
+      cons_maddr : in std_logic_vector(15 downto 0);                 -- microcode address fpu/cpu
+      cons_br : in std_logic_vector(15 downto 0);
+      cons_dr : in std_logic_vector(15 downto 0);
+      cons_parh : in std_logic;
+      cons_parl : in std_logic;
+
+      cons_adrserr : in std_logic;
+      cons_run : in std_logic;
+      cons_pause : in std_logic;
+      cons_master : in std_logic;
+      cons_kernel : in std_logic;
+      cons_super : in std_logic;
+      cons_user : in std_logic;
+      cons_id : in std_logic;
+      cons_map16 : in std_logic;
+      cons_map18 : in std_logic;
+      cons_map22 : in std_logic;
+
+      sample_cycles : in std_logic_vector(15 downto 0) := x"0400";
+      minon_cycles : in std_logic_vector(15 downto 0) := x"0400";
+
+      clkin : in std_logic;
+      reset : in std_logic
+   );
+end component;
+
 component ssegdecoder is
    port(
       i : in std_logic_vector(3 downto 0);
@@ -259,17 +305,40 @@ end component;
 
 signal c0 : std_logic;
 
+signal reset: std_logic;
 signal cpuclk : std_logic := '0';
 signal cpureset : std_logic := '1';
 signal cpuresetlength : integer range 0 to 63 := 63;
-signal slowreset : std_logic;
-signal slowresetdelay : integer range 0 to 4095 := 4095;
 
 signal ifetch: std_logic;
 signal iwait: std_logic;
-signal reset: std_logic;
-signal lineclock: std_logic;
-signal sluclock: std_logic;
+signal txtx : std_logic;
+signal rxrx : std_logic;
+signal txtx1 : std_logic;
+signal rxrx1 : std_logic;
+
+signal have_rl : integer range 0 to 1;
+signal rl_cs : std_logic;
+signal rl_mosi : std_logic;
+signal rl_miso : std_logic;
+signal rl_sclk : std_logic;
+signal rl_sddebug : std_logic_vector(3 downto 0);
+
+signal have_rk : integer range 0 to 1;
+signal rk_cs : std_logic;
+signal rk_mosi : std_logic;
+signal rk_miso : std_logic;
+signal rk_sclk : std_logic;
+signal rk_sddebug : std_logic_vector(3 downto 0);
+
+signal have_rh : integer range 0 to 1;
+signal rh_cs : std_logic;
+signal rh_mosi : std_logic;
+signal rh_miso : std_logic;
+signal rh_sclk : std_logic;
+signal rh_sddebug : std_logic_vector(3 downto 0);
+
+signal sddebug : std_logic_vector(3 downto 0);
 
 signal addr : std_logic_vector(21 downto 0);
 signal addrq : std_logic_vector(21 downto 0);
@@ -279,19 +348,11 @@ signal control_dati : std_logic;
 signal control_dato : std_logic;
 signal control_datob : std_logic;
 
-signal cs : std_logic;
-signal mosi : std_logic;
-signal miso : std_logic;
-signal sclk : std_logic;
-signal sddebug : std_logic_vector(3 downto 0);
-
-signal vga_hsync : std_logic;
-signal vga_vsync : std_logic;
-signal vga_out : std_logic;
-
 signal dram_match : std_logic;
 signal dram_counter : integer range 0 to 32767;
 signal dram_wait : integer range 0 to 15;
+
+signal dram_refresh_count : integer range 0 to 255;
 
 type dram_fsm_type is (
    dram_init,
@@ -325,6 +386,42 @@ type dram_fsm_type is (
 );
 signal dram_fsm : dram_fsm_type := dram_init;
 
+signal cons_load : std_logic;
+signal cons_exa : std_logic;
+signal cons_dep : std_logic;
+signal cons_cont : std_logic;
+signal cons_ena : std_logic;
+signal cons_start : std_logic;
+signal cons_sw : std_logic_vector(21 downto 0);
+signal cons_adss_mode : std_logic_vector(1 downto 0);
+signal cons_adss_id : std_logic;
+signal cons_adss_cons : std_logic;
+
+signal cons_consphy : std_logic_vector(21 downto 0);
+signal cons_progphy : std_logic_vector(21 downto 0);
+signal cons_br : std_logic_vector(15 downto 0);
+signal cons_shfr : std_logic_vector(15 downto 0);
+signal cons_maddr : std_logic_vector(15 downto 0);
+signal cons_dr : std_logic_vector(15 downto 0);
+signal cons_parh : std_logic;
+signal cons_parl : std_logic;
+
+signal cons_adrserr : std_logic;
+signal cons_run : std_logic;
+signal cons_pause : std_logic;
+signal cons_master : std_logic;
+signal cons_kernel : std_logic;
+signal cons_super : std_logic;
+signal cons_user : std_logic;
+signal cons_id : std_logic;
+signal cons_map16 : std_logic;
+signal cons_map18 : std_logic;
+signal cons_map22 : std_logic;
+
+signal sample_cycles : std_logic_vector(15 downto 0) := x"0400";
+signal minon_cycles : std_logic_vector(15 downto 0) := x"0400";
+
+
 begin
 
    pll0: pll port map(
@@ -334,7 +431,89 @@ begin
 
 --   c0 <= clkin;
 
+
+   have_rh <= 0; have_rl <= 0; have_rk <= 1;
+
    pdp11: unibus port map(
+      modelcode => 20,
+
+      have_kl11 => 2,
+      tx0 => txtx,
+      rx0 => rxrx,
+      cts0 => cts,
+      rts0 => rts,
+      kl0_bps => 9600,
+      kl0_force7bit => 1,
+      kl0_rtscts => 0,
+
+      tx1 => txtx1,
+      rx1 => rxrx1,
+      kl1_bps => 9600,
+      kl1_force7bit => 1,
+
+      have_rl => have_rl,
+      have_rl_debug => 1,
+      rl_sdcard_cs => rl_cs,
+      rl_sdcard_mosi => rl_mosi,
+      rl_sdcard_sclk => rl_sclk,
+      rl_sdcard_miso => rl_miso,
+      rl_sdcard_debug => rl_sddebug,
+
+      have_rk => have_rk,
+      have_rk_debug => 1,
+      rk_sdcard_cs => rk_cs,
+      rk_sdcard_mosi => rk_mosi,
+      rk_sdcard_sclk => rk_sclk,
+      rk_sdcard_miso => rk_miso,
+      rk_sdcard_debug => rk_sddebug,
+
+      have_rh => have_rh,
+      have_rh_debug => 1,
+      rh_sdcard_cs => rh_cs,
+      rh_sdcard_mosi => rh_mosi,
+      rh_sdcard_sclk => rh_sclk,
+      rh_sdcard_miso => rh_miso,
+      rh_sdcard_debug => rh_sddebug,
+
+      have_xu => 0,
+      xu_cs => xu_cs,
+      xu_mosi => xu_mosi,
+      xu_sclk => xu_sclk,
+      xu_miso => xu_miso,
+      xu_debug_tx => xu_debug_tx,
+
+      cons_load => cons_load,
+      cons_exa => cons_exa,
+      cons_dep => cons_dep,
+      cons_cont => cons_cont,
+      cons_ena => cons_ena,
+      cons_start => cons_start,
+      cons_sw => cons_sw,
+      cons_adss_mode => cons_adss_mode,
+      cons_adss_id => cons_adss_id,
+      cons_adss_cons => cons_adss_cons,
+
+      cons_consphy => cons_consphy,
+      cons_progphy => cons_progphy,
+      cons_shfr => cons_shfr,
+      cons_maddr => cons_maddr,
+      cons_br => cons_br,
+      cons_dr => cons_dr,
+      cons_parh => cons_parh,
+      cons_parl => cons_parl,
+
+      cons_adrserr => cons_adrserr,
+      cons_run => cons_run,
+      cons_pause => cons_pause,
+      cons_master => cons_master,
+      cons_kernel => cons_kernel,
+      cons_super => cons_super,
+      cons_user => cons_user,
+      cons_id => cons_id,
+      cons_map16 => cons_map16,
+      cons_map18 => cons_map18,
+      cons_map22 => cons_map22,
+
       addr => addr,
       dati => dati,
       dato => dato,
@@ -346,30 +525,53 @@ begin
       ifetch => ifetch,
       iwait => iwait,
 
-      have_rh => 1,
-      have_rh_debug => 1,
-      rh_sdcard_cs => cs,
-      rh_sdcard_mosi => mosi,
-      rh_sdcard_sclk => sclk,
-      rh_sdcard_miso => miso,
-      rh_sdcard_debug => sddebug,
-
-      have_xu => 1,
-      xu_cs => xu_cs,
-      xu_mosi => xu_mosi,
-      xu_sclk => xu_sclk,
-      xu_miso => xu_miso,
-
-      have_kl11 => 1,
-      rx0 => rx,
-      tx0 => tx,
-      kl0_force7bit => 1,
-
-      modelcode => 70,
-
       reset => cpureset,
       clk50mhz => clkin,
       clk => cpuclk
+   );
+
+   panel: paneldriver port map(
+      panel_xled => panel_xled,
+      panel_col => panel_col,
+      panel_row => panel_row,
+
+      cons_load => cons_load,
+      cons_exa => cons_exa,
+      cons_dep => cons_dep,
+      cons_cont => cons_cont,
+      cons_ena => cons_ena,
+      cons_start => cons_start,
+      cons_sw => cons_sw,
+      cons_adss_mode => cons_adss_mode,
+      cons_adss_id => cons_adss_id,
+      cons_adss_cons => cons_adss_cons,
+
+      cons_consphy => cons_consphy,
+      cons_progphy => cons_progphy,
+      cons_shfr => cons_shfr,
+      cons_maddr => cons_maddr,
+      cons_br => cons_br,
+      cons_dr => cons_dr,
+      cons_parh => cons_parh,
+      cons_parl => cons_parl,
+
+      cons_adrserr => cons_adrserr,
+      cons_run => cons_run,
+      cons_pause => cons_pause,
+      cons_master => cons_master,
+      cons_kernel => cons_kernel,
+      cons_super => cons_super,
+      cons_user => cons_user,
+      cons_id => cons_id,
+      cons_map16 => cons_map16,
+      cons_map18 => cons_map18,
+      cons_map22 => cons_map22,
+
+      sample_cycles => sample_cycles,
+      minon_cycles => minon_cycles,
+
+      clkin => cpuclk,
+      reset => cpureset
    );
 
    ssegd3: ssegdecoder port map(
@@ -394,49 +596,34 @@ begin
    );
 
 
-   reset <= (not resetbtn) ; -- or power_on_reset;
-
    greenled <= "0000" & sddebug;
+   redled <= "00" & ifetch & not rxrx & not txtx1 & not rxrx1 & sddebug;
 
-   sdcard_cs <= cs;
-   sdcard_mosi <= mosi;
-   sdcard_sclk <= sclk;
-   miso <= sdcard_miso;
+   tx <= txtx;
+   rxrx <= rx;
+   tx1 <= txtx1;
+   rxrx1 <= rx1;
 
-   vgag <= "1111" when vga_out = '1' else "0000";
-   vgab <= "0000";
-   vgar <= "0000";
-   vgav <= vga_vsync;
-   vgah <= vga_hsync;
-
--- 18-bit addr, control signals, minimal sd card
---   dd3 <= addr(17 downto 10);
---   dd2 <= addr(9 downto 2);
---   dd1 <= dato(7 downto 0) when control_dato = '1' else dati(7 downto 0) when control_dati = '1' else "00000001";
---   dd0 <= addr(1 downto 0) & control_dati & control_dato & cs & miso & mosi & sclk;
-
--- 16-bit addr, sd card plus debug
---   dd3 <= addr(15 downto 8);
---   dd2 <= addr(7 downto 0);
---   dd1 <= dato(7 downto 0) when control_dato = '1' else dati(7 downto 0) when control_dati = '1' else "00000001";
---   dd0 <= sddebug & cs & miso & mosi & sclk;
-
--- debug output, 16-bit addr, 16 bit data
---   dclk1 <= cpuclk;
---   dclk2 <= ifetch;
---   dd3 <= addr(15 downto 8);
---   dd2 <= addr(7 downto 0);
---   dd1 <= dram_dq(15 downto 8);
---   dd0 <= dram_dq(7 downto 0);
+   sddebug <= rh_sddebug when have_rh = 1 else rl_sddebug when have_rl = 1 else rk_sddebug;
+   sdcard_cs <= rh_cs when have_rh = 1 else rl_cs when have_rl = 1 else rk_cs;
+   sdcard_mosi <= rh_mosi when have_rh = 1 else rl_mosi when have_rl = 1 else rk_mosi;
+   sdcard_sclk <= rh_sclk when have_rh = 1 else rl_sclk when have_rl = 1 else rk_sclk;
+   rh_miso <= sdcard_miso;
+   rl_miso <= sdcard_miso;
+   rk_miso <= sdcard_miso;
 
    dram_match <= '1' when addr(21 downto 18) /= "1111" else '0';
    dram_cke <= '1';
    dram_clk <= c0;
 
+   reset <= (not resetbtn) ; -- or power_on_reset;
+
+
    process(c0)
    begin
       if c0='1' and c0'event then
-         if slowreset = '1' then
+
+         if reset = '1' then
             dram_fsm <= dram_init;
             dram_cs_n <= '0';
             dram_ras_n <= '1';
@@ -452,6 +639,7 @@ begin
             cpuclk <= '0';
             cpureset <= '1';
             cpuresetlength <= 63;
+            dram_refresh_count <= 1;
          else
 
             case dram_fsm is
@@ -469,7 +657,7 @@ begin
                   dram_ba_0 <= '0';
 
                   cpureset <= '1';
-                  cpuresetlength <= 8;
+                  cpuresetlength <= 63;
                   dram_counter <= 32767;
                   dram_fsm <= dram_poweron;
 
@@ -502,6 +690,7 @@ begin
                   dram_ldqm <= '1';
                   dram_ba_1 <= '0';
                   dram_ba_0 <= '0';
+                  dram_addr(12) <= '0';
                   dram_addr(11) <= '0';
                   dram_addr(9 downto 0) <= (others => '0');
 
@@ -551,7 +740,7 @@ begin
                   dram_cas_n <= '0';
                   dram_we_n <= '0';
 
-                  dram_addr(11 downto 7) <= (others => '0');
+                  dram_addr(12 downto 7) <= (others => '0');
                   dram_addr(6 downto 4) <= "011";          -- cas length 3
                   dram_addr(3) <= '0';                     -- sequential
                   dram_addr(2 downto 0) <= "000";          -- length 0
@@ -583,6 +772,7 @@ begin
                   dram_ldqm <= '1';
                   dram_ba_1 <= '0';
                   dram_ba_0 <= '0';
+                  dram_addr(12) <= '0';
                   dram_addr(11) <= '0';
                   dram_addr(9 downto 0) <= (others => '0');
 
@@ -590,13 +780,14 @@ begin
 
                when dram_c1 =>
 
-               cpuclk <= '1';
-
                   if cpuresetlength = 0 then
                      cpureset <= '0';
                   else
                      cpuresetlength <= cpuresetlength - 1;
                   end if;
+
+               cpuclk <= '1';
+
                   dram_fsm <= dram_c2;
 
                when dram_c2 =>
@@ -604,7 +795,7 @@ begin
                   dram_fsm <= dram_c3;
 
                when dram_c3 =>
-                  dram_fsm <= dram_c4;         -- 6, for more agressive timing
+                  dram_fsm <= dram_c4;         -- 5, for more agressive timing
 
                when dram_c4 =>
                   dram_fsm <= dram_c5;
@@ -624,6 +815,7 @@ begin
                      dram_ras_n <= '0';
                      dram_cas_n <= '1';
                      dram_we_n <= '1';
+                     dram_addr(12) <= '0';
                      dram_addr(11 downto 0) <= addr(20 downto 9);
 
                      dram_udqm <= '0';
@@ -639,6 +831,7 @@ begin
                      dram_ras_n <= '0';
                      dram_cas_n <= '1';
                      dram_we_n <= '1';
+                     dram_addr(12) <= '0';
                      dram_addr(11 downto 0) <= addr(20 downto 9);
 
                      dram_udqm <= '0';
@@ -649,10 +842,15 @@ begin
 
                   if dram_match = '0' or (control_dato = '0' and control_dati = '0') then
                      -- auto refresh command
-                     dram_cs_n <= '0';
-                     dram_ras_n <= '0';
-                     dram_cas_n <= '0';
-                     dram_we_n <= '1';
+                     if dram_refresh_count = 0 then
+                        dram_cs_n <= '0';
+                        dram_ras_n <= '0';
+                        dram_cas_n <= '0';
+                        dram_we_n <= '1';
+                        dram_refresh_count <= 255;
+                     else
+                        dram_refresh_count <= dram_refresh_count - 1;
+                     end if;
                   end if;
 
                   dram_fsm <= dram_c7;
@@ -675,6 +873,7 @@ begin
                      dram_ras_n <= '1';
                      dram_cas_n <= '0';
                      dram_we_n <= '1';
+                     dram_addr(12) <= '0';
                      dram_addr(11) <= '0';
                      dram_addr(10) <= '1';
                      dram_addr(9) <= '1';
@@ -694,6 +893,7 @@ begin
                      dram_ras_n <= '1';
                      dram_cas_n <= '0';
                      dram_we_n <= '0';
+                     dram_addr(12) <= '0';
                      dram_addr(11) <= '0';
                      dram_addr(10) <= '1';
                      dram_addr(9) <= '1';
@@ -751,23 +951,6 @@ begin
 
             end case;
 
-         end if;
-      end if;
-   end process;
-
-   process (c0)
-   begin
-      if c0='1' and c0'event then
-         if reset = '1' then
-            slowreset <= '1';
-            slowresetdelay <= 4095;
-         else
-            if slowresetdelay = 0 then
-               slowreset <= '0';
-            else
-               slowreset <= '1';
-               slowresetdelay <= slowresetdelay - 1;
-            end if;
          end if;
       end if;
    end process;

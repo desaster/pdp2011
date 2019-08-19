@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.14 $
+-- $Revision: 1.17 $
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -61,15 +61,47 @@ entity rh11 is
 
       have_rh : in integer range 0 to 1 := 0;
       have_rh70 : in integer range 0 to 1 := 0;
-      have_rh_debug : in integer range 0 to 1 := 1;
       rmtype : in integer range 4 to 7 := 6;
       reset : in std_logic;
-      sdclock : in std_logic;
+      clk50mhz : in std_logic;
+      nclk : in std_logic;
       clk : in std_logic
    );
 end rh11;
 
 architecture implementation of rh11 is
+
+
+component sdspi is
+   port(
+      sdcard_cs : out std_logic;
+      sdcard_mosi : out std_logic;
+      sdcard_sclk : out std_logic;
+      sdcard_miso : in std_logic := '0';
+      sdcard_debug : out std_logic_vector(3 downto 0);
+
+      sdcard_addr : in std_logic_vector(22 downto 0);
+
+      sdcard_idle : out std_logic;
+      sdcard_read_start : in std_logic;
+      sdcard_read_ack : in std_logic;
+      sdcard_read_done : out std_logic;
+      sdcard_write_start : in std_logic;
+      sdcard_write_ack : in std_logic;
+      sdcard_write_done : out std_logic;
+      sdcard_error : out std_logic;
+
+      sdcard_xfer_addr : in integer range 0 to 255;
+      sdcard_xfer_read : in std_logic;
+      sdcard_xfer_out : out std_logic_vector(15 downto 0);
+      sdcard_xfer_write : in std_logic;
+      sdcard_xfer_in : in std_logic_vector(15 downto 0);
+
+      controller_clk : in std_logic;
+      reset : in std_logic;
+      clk50mhz : in std_logic
+   );
+end component;
 
 
 -- regular bus interface
@@ -207,13 +239,11 @@ signal rmcs3_ie : std_logic;
 signal rmcs3_ipck : std_logic_vector(3 downto 0);
 
 
--- others
+-- controller internals
 
-signal start_read : std_logic;
-signal start_write : std_logic;
 signal update_rmwc : std_logic;
 signal wcp : std_logic_vector(15 downto 0);            -- word count, positive
-signal wrkdb : std_logic_vector(15 downto 0);          -- written by sdcard state machine, copied whenever a command finishes
+signal wrkdb : std_logic_vector(15 downto 0);
 
 signal error_reset : std_logic := '1';
 signal rmclock : integer range 0 to 4095 := 0;
@@ -222,93 +252,126 @@ signal rmclock_piptimer : integer range 0 to 3 := 0;
 signal rmcs1_rdyset : std_logic := '0';
 signal rmds_ataset : std_logic := '0';
 
-
--- sd card interface
-
-signal sdclock_enable : std_logic;
-
-type sd_states is (
-   sd_reset,
-   sd_clk1,
-   sd_clk2,
-   sd_cmd0,
-   sd_cmd1,
-   sd_cmd1_checkresponse,
-   sd_error_nxm,
-   sd_error,
-   sd_error_recover,
-   sd_send_cmd,
-   sd_send_cmd_noresponse,
-   sd_set_block_length,
-   sd_set_block_length_checkresponse,
-   sd_read,
-   sd_read_checkresponse,
-   sd_read_data_waitstart,
-   sd_read_data,
-   sd_read_rest,
-   sd_read_done,
-   sd_readr1,
-   sd_readr1wait,
-   sd_write,
-   sd_write_checkresponse,
-   sd_write_data_waitstart,
-   sd_write_data_startblock,
-   sd_write_data,
-   sd_write_rest,
-   sd_write_crc,
-   sd_write_readcardresponse,
-   sd_write_waitcardready,
-   sd_write_done,
-   sd_wait,
-   sd_idle
-);
-
-signal sd_state : sd_states := sd_reset;
-signal sd_nextstate : sd_states := sd_reset;
-
-signal counter : integer range 0 to 255;
-signal blockcounter : integer range 0 to 256;                   -- counter within sd card block
-signal sectorcounter : std_logic_vector(8 downto 0);            -- counter within rk11 sector
-
-signal sd_cmd : std_logic_vector(47 downto 0);
-signal sd_r1 : std_logic_vector(6 downto 0);                    -- r1 response token from card
-signal sd_dr : std_logic_vector(3 downto 0);                    -- data response token from card
-
-signal sd_temp : std_logic_vector(15 downto 0);
-
-signal hs_offset : std_logic_vector(22 downto 0);
-signal ca_offset : std_logic_vector(22 downto 0);
-signal dn_offset : std_logic_vector(22 downto 0);
-signal sd_addr : std_logic_vector(22 downto 0);
-
 signal work_bar : std_logic_vector(21 downto 1);
 
 signal noofsec : std_logic_vector(7 downto 0);
 signal nooftrk : std_logic_vector(7 downto 0);
 signal noofcyl : std_logic_vector(15 downto 0);
 
+signal write_start : std_logic;
+
+
+-- sdspi interface signals
+
+signal sdcard_xfer_clk : std_logic;
+signal sdcard_xfer_addr : integer range 0 to 255;
+signal sdcard_xfer_read : std_logic;
+signal sdcard_xfer_out : std_logic_vector(15 downto 0);
+signal sdcard_xfer_write : std_logic;
+signal sdcard_xfer_in : std_logic_vector(15 downto 0);
+
+signal sdcard_idle : std_logic;
+signal sdcard_read_start : std_logic;
+signal sdcard_read_ack : std_logic;
+signal sdcard_read_done : std_logic;
+signal sdcard_write_start : std_logic;
+signal sdcard_write_ack : std_logic;
+signal sdcard_write_done : std_logic;
+signal sdcard_error : std_logic;
+
+-- busmaster controller
+
+signal nxm : std_logic;
+signal sectorcounter : std_logic_vector(8 downto 0);            -- counter within sector
+signal hs_offset : std_logic_vector(22 downto 0);
+signal ca_offset : std_logic_vector(22 downto 0);
+signal dn_offset : std_logic_vector(22 downto 0);
+signal sd_addr : std_logic_vector(22 downto 0);
+
+type busmaster_state_t is (
+   busmaster_idle,
+   busmaster_read,
+   busmaster_read1,
+   busmaster_read_done,
+   busmaster_write1,
+   busmaster_write,
+   busmaster_write_wait,
+   busmaster_write_done,
+   busmaster_wait
+);
+signal busmaster_state : busmaster_state_t := busmaster_idle;
+
+attribute keep: boolean;
+attribute preserve: boolean;
+attribute keep of wcp : signal is true;
+attribute preserve of wcp : signal is true;
+attribute keep of work_bar : signal is true;
+attribute preserve of work_bar : signal is true;
+attribute keep of sdcard_read_start : signal is true;
+attribute preserve of sdcard_read_start : signal is true;
+attribute keep of sdcard_read_ack : signal is true;
+attribute preserve of sdcard_read_ack : signal is true;
+attribute keep of sdcard_read_done : signal is true;
+attribute preserve of sdcard_read_done : signal is true;
+attribute keep of sdcard_idle : signal is true;
+attribute preserve of sdcard_idle : signal is true;
+attribute keep of sd_addr : signal is true;
+attribute preserve of sd_addr : signal is true;
+
+
 begin
 
    with rmtype select noofsec <=
-      "00010110" when 4,
-      "00100000" when 5,
-      "00010110" when 6,
-      "00110010" when 7,
+      "00010110" when 4,                         -- 22
+      "00100000" when 5,                         -- 32
+      "00010110" when 6,                         -- 22
+      "00110010" when 7,                         -- 50
       "00000000" when others;
 
    with rmtype select nooftrk <=
-      "00010011" when 4,
-      "00010011" when 5,
-      "00010011" when 6,
-      "00100000" when 7,
+      "00010011" when 4,                         -- 19
+      "00010011" when 5,                         -- 19
+      "00010011" when 6,                         -- 19
+      "00100000" when 7,                         -- 32
       "00000000" when others;
 
    with rmtype select noofcyl <=
-      "0000000110011011" when 4,
-      "0000001100110111" when 5,
-      "0000001100101111" when 6,
-      "0000001001110110" when 7,
+      "0000000110011011" when 4,                 -- 411 = 171798
+      "0000001100110111" when 5,                 -- 823 = 500384
+      "0000001100101111" when 6,                 -- 815 = 340670
+      "0000001001110110" when 7,                 -- 630 = 1008000
       "0000000000000000" when others;
+
+
+   sd1: sdspi port map(
+      sdcard_cs => sdcard_cs,
+      sdcard_mosi => sdcard_mosi,
+      sdcard_sclk => sdcard_sclk,
+      sdcard_miso => sdcard_miso,
+      sdcard_debug => sdcard_debug,
+
+      sdcard_addr => sd_addr,
+
+      sdcard_idle => sdcard_idle,
+      sdcard_read_start => sdcard_read_start,
+      sdcard_read_ack => sdcard_read_ack,
+      sdcard_read_done => sdcard_read_done,
+      sdcard_write_start => sdcard_write_start,
+      sdcard_write_ack => sdcard_write_ack,
+      sdcard_write_done => sdcard_write_done,
+      sdcard_error => sdcard_error,
+
+      sdcard_xfer_addr => sdcard_xfer_addr,
+      sdcard_xfer_read => sdcard_xfer_read,
+      sdcard_xfer_out => sdcard_xfer_out,
+      sdcard_xfer_in => sdcard_xfer_in,
+      sdcard_xfer_write => sdcard_xfer_write,
+
+      controller_clk => clk,
+      reset => reset,
+      clk50mhz => clk50mhz
+   );
+
 
 -- regular bus interface
 
@@ -342,28 +405,28 @@ begin
 
 -- regular bus interface : handle register contents and dependent logic
 
-   process(clk, reset)
+   process(nclk, reset)
       variable v_rsec : std_logic;
       variable v_rtrk : std_logic;
       variable v_rcyl : std_logic;
       variable v_iae : std_logic;
    begin
-      if clk = '1' and clk'event then
+      if nclk = '1' and nclk'event then
          if reset = '1' then
 
             br <= '0';
             interrupt_trigger <= '0';
             interrupt_state <= i_idle;
 
-            start_read <= '0';
-            start_write <= '0';
-
-            npr <= '0';
-
             rmcs2_clr <= '1';
             error_reset <= '1';
             rmcs1_rdyset <= '0';
             rmds_ataset <= '0';
+
+            sdcard_read_start <= '0';
+            write_start <= '0';
+            rmcs1_rdy <= '1';
+            rmcs1_rdyset <= '0';
 
          else
 
@@ -405,7 +468,6 @@ begin
 
                end case;
             else
-               npr <= '0';
                br <= '0';
             end if;
 
@@ -715,16 +777,6 @@ begin
                   else
                      rmla_sc <= rmla_sc + "00001";
                   end if;
-
---                   if rmds_pip = '1' then
---                      if rmclock_piptimer /= 0 then
---                         rmclock_piptimer <= rmclock_piptimer - 1;
---                      else
---                         rmds_pip <= '0';
--- --                        rmds_ata <= '1';
---                      end if;
---                   end if;
-
                end if;
 
                if rmds_ataset = '1' then
@@ -767,7 +819,7 @@ begin
                   and rmcs1_fnc /= "01000" and rmcs1_fnc /= "01001" then
                      rmer2_ivc <= '1';
                   elsif rmcs2_u /= "000" then
-                     -- nothing - there is one drive only
+                   -- nothing - there is one drive only
                   else
 
                      if unsigned(rmdc) < unsigned(noofcyl) then
@@ -821,6 +873,7 @@ begin
                            rmof_fmt <= '0';
                            rmcs1_go <= '0';
                            rmds_dry <= '1';
+                           rmds_ataset <= '1';
 
                         when "00100" =>             -- drive clear (EK-RP056-MM-01_maint_Dec75.pdf)
                            error_reset <= '1';
@@ -868,35 +921,33 @@ begin
                            rmds_ataset <= '1';
                            rmcs1_go <= '0';
                            rmds_dry <= '1';
-                           rmcs1_rdyset <= '1';
+--                           rmcs1_rdyset <= '1';
 
                         when "11000" | "11001" =>             -- write data, write header/data
-                           npr <= '1';
-                           if npg = '1' then
-                              if sd_state = sd_idle and start_write = '0' then
-                                 if v_iae = '1' then
-                                    rmer1_iae <= '1';
-                                    rmcs1_go <= '0';
-                                    rmds_dry <= '1';
-                                    npr <= '0';
-                                    rmcs1_rdyset <= '1';
-                                 elsif rmds_wrl = '1' then                  -- if write lock is on
-                                    rmer1_wle <= '1';
-                                    rmds_ataset <= '1';
-                                    rmcs1_go <= '0';
-                                    rmds_dry <= '1';
-                                    npr <= '0';
-                                    rmcs1_rdyset <= '1';
-                                 else
-                                    start_write <= '1';
-                                    if rmcs1_fnc = "11001" and unsigned(wcp) >= unsigned'("0000000000000010") then
-                                       wcp <= wcp - 2;
-                                    end if;
+                           rmcs1_rdy <= '0';
+                           if sdcard_idle = '1' and write_start = '0' then
+                              if v_iae = '1' then
+                                 rmer1_iae <= '1';
+                                 rmcs1_go <= '0';
+                                 rmds_dry <= '1';
+                                 rmcs1_rdyset <= '1';
+                              elsif rmds_wrl = '1' then                  -- if write lock is on
+                                 rmer1_wle <= '1';
+                                 rmds_ataset <= '1';
+                                 rmcs1_go <= '0';
+                                 rmds_dry <= '1';
+                                 rmcs1_rdyset <= '1';
+                              else
+                                 write_start <= '1';
+                                 if rmcs1_fnc(0) = '1' and unsigned(wcp) >= unsigned'("0000000000000010") then
+                                    wcp <= wcp - 2;
                                  end if;
+                              end if;
 
-                              elsif sd_state = sd_write_done and start_write = '1' then
-                                 rmbae <= work_bar(21 downto 16);
-                                 rmba <= work_bar(15 downto 1) & '0';
+                           elsif sdcard_write_ack = '1' and sdcard_write_done = '0' and write_start = '1' then
+                              write_start <= '0';
+
+                              if nxm = '0' and sdcard_error = '0' then
                                  if rmda_sa = noofsec - 1 then
                                     rmda_sa <= (others => '0');
                                     if rmda_ta = nooftrk - 1 then
@@ -913,62 +964,53 @@ begin
                                     rmda_sa <= rmda_sa + 1;
                                  end if;
 
+                                 rmbae <= work_bar(21 downto 16);
+                                 rmba <= work_bar(15 downto 1) & '0';
                                  if unsigned(wcp) > unsigned'("0000000100000000") then               -- check if we need to do another sector, and setup for the next round if so
                                     wcp <= unsigned(wcp) - unsigned'("0000000100000000");
                                  else
                                     wcp <= (others => '0');
                                     rmcs1_go <= '0';
                                     rmds_dry <= '1';
-                                    npr <= '0';
+--                                    rmcs1_rdy <= '1';
                                     rmcs1_rdyset <= '1';
                                  end if;
-                                 start_write <= '0';
-
-                              elsif sd_state = sd_error_nxm then
+                              else
                                  rmbae <= work_bar(21 downto 16);
                                  rmba <= work_bar(15 downto 1) & '0';
                                  rmcs1_go <= '0';
                                  rmds_dry <= '1';
-                                 npr <= '0';
-                                 rmcs2_nem <= '1';
+                                 if nxm = '1' then
+                                    rmcs2_nem <= '1';
+                                 end if;
+                                 if sdcard_error = '1' then
+                                    rmer1_dck <= '1';
+                                 end if;
                                  rmds_ataset <= '1';
                                  rmcs1_rdyset <= '1';
-                                 start_write <= '0';
-
-                              elsif sd_state = sd_error then
-                                 rmbae <= work_bar(21 downto 16);
-                                 rmba <= work_bar(15 downto 1) & '0';
-                                 rmcs1_go <= '0';
-                                 rmds_dry <= '1';
-                                 npr <= '0';
-                                 rmer1_dck <= '1';           -- ?? some error bit should be set, but this one?
-                                 rmds_ataset <= '1';
-                                 rmcs1_rdyset <= '1';
-                                 start_write <= '0';
-
                               end if;
+
                            end if;
 
                         when "11100" | "11101" | "10100" | "10101" =>             -- read data, read header/data, write check, write check header/data
-                           npr <= '1';
-                           if npg = '1' then
-                              if sd_state = sd_idle and start_read = '0' then
-                                 if v_iae = '1' then
-                                    rmer1_iae <= '1';
-                                    rmcs1_go <= '0';
-                                    rmds_dry <= '1';
-                                    npr <= '0';
-                                    rmcs1_rdyset <= '1';
-                                 else
-                                    start_read <= '1';
-                                    if rmcs1_fnc(0) = '1' and unsigned(wcp) >= unsigned'("0000000000000010") then
-                                       wcp <= wcp - 2;
-                                    end if;
+                           rmcs1_rdy <= '0';
+                           if sdcard_idle = '1' and sdcard_read_start = '0' and sdcard_read_done = '0' then
+                              if v_iae = '1' then
+                                 rmer1_iae <= '1';
+                                 rmcs1_go <= '0';
+                                 rmds_dry <= '1';
+                                 rmcs1_rdyset <= '1';
+                              else
+                                 sdcard_read_start <= '1';
+                                 if rmcs1_fnc(0) = '1' and unsigned(wcp) >= unsigned'("0000000000000010") then
+                                    wcp <= wcp - 2;
                                  end if;
+                              end if;
 
-                              elsif sd_state = sd_read_done and start_read = '1' then
-                                 rmbae <= work_bar(21 downto 16);
-                                 rmba <= work_bar(15 downto 1) & '0';
+                           elsif sdcard_read_ack = '1' and sdcard_read_done = '0' and sdcard_read_start = '1' then
+                              sdcard_read_start <= '0';
+
+                              if nxm = '0' and sdcard_error = '0' then
                                  if rmda_sa = noofsec - 1 then
                                     rmda_sa <= (others => '0');
                                     if rmda_ta = nooftrk - 1 then
@@ -985,44 +1027,37 @@ begin
                                     rmda_sa <= rmda_sa + 1;
                                  end if;
 
+                                 rmbae <= work_bar(21 downto 16);
+                                 rmba <= work_bar(15 downto 1) & '0';
                                  if unsigned(wcp) > unsigned'("0000000100000000") then               -- check if we need to do another sector, and setup for the next round if so
                                     wcp <= unsigned(wcp) - unsigned'("0000000100000000");
                                  else
                                     wcp <= (others => '0');
                                     rmcs1_go <= '0';
                                     rmds_dry <= '1';
-                                    npr <= '0';
+--                                    rmcs1_rdy <= '1';
                                     rmcs1_rdyset <= '1';
                                  end if;
-                                 start_read <= '0';
-
-                              elsif sd_state = sd_error_nxm then
+                              else
                                  rmbae <= work_bar(21 downto 16);
                                  rmba <= work_bar(15 downto 1) & '0';
                                  rmcs1_go <= '0';
                                  rmds_dry <= '1';
-                                 npr <= '0';
-                                 rmcs2_nem <= '1';
+                                 if nxm = '1' then
+                                    rmcs2_nem <= '1';
+                                 end if;
+                                 if sdcard_error = '1' then
+                                    rmer1_dck <= '1';
+                                 end if;
                                  rmds_ataset <= '1';
                                  rmcs1_rdyset <= '1';
-                                 start_read <= '0';
-
-                              elsif sd_state = sd_error then
-                                 rmbae <= work_bar(21 downto 16);
-                                 rmba <= work_bar(15 downto 1) & '0';
-                                 rmcs1_go <= '0';
-                                 rmds_dry <= '1';
-                                 npr <= '0';
-                                 rmer1_dck <= '1';           -- ?? some error bit should be set, but this one?
-                                 rmds_ataset <= '1';
-                                 rmcs1_rdyset <= '1';
-                                 start_read <= '0';
-
                               end if;
+
                            end if;
 
                         when others =>
                            rmer1_ilf <= '1';
+                           rmer2_ivc <= '1';
                            rmds_ataset <= '1';
                            rmcs1_go <= '0';
                            rmds_dry <= '1';
@@ -1070,19 +1105,19 @@ begin
                   rmcs2_ir <= '1';                                   -- ready for input
                   rmcs2_pat <= '0';
                   rmcs2_bai <= '0';
-                  rmcs2_u <= "000";
+                  rmcs2_u <= "000";                                  -- unit number
 
 -- rmds  17 776 712                                             -- drive status
-                  rmds_ata <='0';
---                  rmds_err <='0';
-                  rmds_pip <='0';
-                  rmds_mol <='1';                                    -- medium is online
-                  rmds_wrl <='0';
-                  rmds_lst <='0';
-                  rmds_pgm <='0';
-                  rmds_dpr <='1';                                    -- drive is available to this controller, there is no other controller
-                  rmds_dry <='1';                                    -- FIXME, set according to sdcard state?
-                  rmds_vv <='1';                                     -- FIXME, set according to sdcard state?
+                  rmds_ata <= '0';
+--                  rmds_err <= '0';
+                  rmds_pip <= '0';
+                  rmds_mol <= '1';                                   -- medium is online
+                  rmds_wrl <= '0';
+                  rmds_lst <= '0';
+                  rmds_pgm <= '0';
+                  rmds_dpr <= '1';                                   -- drive is available to this controller, there is no other controller
+                  rmds_dry <= '1';                                   -- FIXME, set according to sdcard state?
+                  rmds_vv <= '1';                                    -- FIXME, set according to sdcard state?
                   rmds_om <= '0';
 
 -- rmmr1  17 776 724                                             -- maintenance register
@@ -1145,7 +1180,7 @@ begin
       end if;
    end process;
 
--- compose read address
+-- compose sector address
 
 -- 23 bits adders :-)
    ca_offset <=
@@ -1190,574 +1225,187 @@ begin
 
 -- handle sd card interface
 
-   sdcard_sclk <= sdclock when sdclock_enable = '1' else '0';
-
-   process(sdclock, reset)
+   process(clk, reset)
    begin
-      if sdclock = '1' and sdclock'event then
+      if clk = '1' and clk'event then
          if reset = '1' then
-            sdclock_enable <= '0';
-            counter <= 255;
-            sd_state <= sd_reset;
-            sd_nextstate <= sd_reset;
-            if have_rh_debug = 1 then
-               sdcard_debug <= "0010";
-            end if;
-            sdcard_cs <= '0';
-
-            blockcounter <= 0;
-            sectorcounter <= "000000000";
+            busmaster_state <= busmaster_idle;
+            npr <= '0';
+            sdcard_read_ack <= '0';
+            sdcard_write_start <= '0';
+            nxm <= '0';
          else
 
-            if have_rh = 1 then
-               case sd_state is
+            case busmaster_state is
 
-   -- reset : start here to set the sd card in spi mode; first step is starting the clock
-
-                  when sd_reset =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        counter <= 170;
-                        sdclock_enable <= '1';
-                        sdcard_cs <= '1';
-                        sdcard_mosi <= '1';
-                        sd_state <= sd_clk1;
-                        if have_rh_debug = 1 then
-                           sdcard_debug <= "0010";
+               when busmaster_idle =>
+                  nxm <= '0';
+                  if write_start = '1' then
+                     npr <= '1';
+                     if npg = '1' then
+                        busmaster_state <= busmaster_write1;
+                        if rmcs1_fnc = "11001" then                        -- write header/data
+                           work_bar <= (rmbae & rmba(15 downto 1)) + 2;
+                        else
+                           work_bar <= rmbae & rmba(15 downto 1);
                         end if;
+                        if unsigned(wcp) >= unsigned'("0000000100000000") then
+                           sectorcounter <= "011111111";           -- 255
+                        else
+                           sectorcounter <= '0' & (unsigned(wcp(7 downto 0)) - unsigned'("00000001"));
+                        end if;
+
+                        sdcard_xfer_addr <= 0;
                      end if;
-
-   -- set the cs signal active
-
-                  when sd_clk1 =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        counter <= 31;
-                        sdcard_cs <= '0';
-                        sd_state <= sd_clk2;
-                     end if;
-
-   -- allow some time to pass with the cs signal active
-
-                  when sd_clk2 =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        sd_state <= sd_cmd0;
-                     end if;
-
-   -- send a cmd0 command, with a valid crc. after completion of this command, the card is in spi mode
-
-                  when sd_cmd0 =>
-                     counter <= 48;
-                     sd_nextstate <= sd_cmd1;
-                     sd_cmd <= x"400000000095";
-                     sd_state <= sd_send_cmd_noresponse;
-
-   -- send a cmd1 command, this initializes processes within the card
-
-                  when sd_cmd1 =>
-                     counter <= 48;
-                     sd_nextstate <= sd_cmd1_checkresponse;
-                     sd_cmd <= x"410000000001";
-                     sd_state <= sd_send_cmd;
-
-   -- check for completion of the cmd1 command. This may take a long time, so several retries are normal.
-
-                  when sd_cmd1_checkresponse =>
-                     if sd_r1 = "0000001" then
-                        sd_state <= sd_cmd1;
-                     elsif sd_r1 = "0000000" then
-                        sd_state <= sd_set_block_length;
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-   -- set the default blocklength for read commands. Since 512 is required for all write commands anyway, this is what we'll use.
-
-                  when sd_set_block_length =>
-                     counter <= 48;
-                     sd_nextstate <= sd_set_block_length_checkresponse;
-                     sd_cmd <= x"500000020001";                   -- set blocklength to 512 bytes. It's the default, but let's just be sure anyway.
-                     sd_state <= sd_send_cmd;
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "0001";
-                     end if;
-
-                  when sd_set_block_length_checkresponse =>
-                     if sd_r1 = "0000000" then
-                        sd_state <= sd_idle;                   -- init is complete
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-   -- send a read data command to the card
-
-                  when sd_read =>
-                     if rmcs1_fnc(0) = '1' then
-                        work_bar <= (rmbae & rmba(15 downto 1)) + 2;
-                     else
+                  elsif sdcard_read_done = '1' then
+                     npr <= '1';
+                     if npg = '1' then
+                        busmaster_state <= busmaster_read1;
+                        if rmcs1_fnc(0) = '1' then                        -- read header/data, write check header/data
+                           work_bar <= (rmbae & rmba(15 downto 1)) + 2;
+                        else
+                           work_bar <= rmbae & rmba(15 downto 1);
+                        end if;
                         work_bar <= rmbae & rmba(15 downto 1);
-                     end if;
-                     sd_cmd <= x"51" & sd_addr & "000000000" & x"01";
-                     sd_nextstate <= sd_read_checkresponse;
-                     counter <= 48;
-                     sd_state <= sd_send_cmd;
-
-                     if have_rh_debug = 1 then
---                         bus_master_addr <= "00" & rkda_dr & rkda_cy & rkda_hd & rkda_sc;
-                        sdcard_debug <= "0100";
-                     end if;
-
-   -- check the first response (r1 format) to the read command
-
-                  when sd_read_checkresponse =>
-                     if sd_r1 = "0000000" then
---                         counter <= 65535;                            -- some cards may take a long time to respond
-                        sd_state <= sd_read_data_waitstart;
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-                     if have_rh_debug = 1 then
---                         bus_master_addr <= "00" & wcp;
-                     end if;
-
-   -- wait for the data header to be sent in response to the read command; the header value is 0xfe, so actually there is just one start bit to read.
-
-                  when sd_read_data_waitstart =>
---                      if counter /= 0 then
---                         counter <= counter - 1;
-                        if sdcard_miso = '0' then
-                           sd_state <= sd_read_data;
-                           counter <= 15;
-                           blockcounter <= 255;                      -- 256 words = 512 bytes
-                           if unsigned(wcp) >= unsigned'("0000000100000000") then
-                              sectorcounter <= "011111111";           -- 255
-                           else
-                              sectorcounter <= '0' & (unsigned(wcp(7 downto 0)) - unsigned'("00000001"));  -- amount - 1
-                           end if;
-                        end if;
---                      else
---                         sd_state <= sd_error;
---                      end if;
-
-                     if have_rh_debug = 1 then
---                         bus_master_addr <= "00" & rkcs_err & rkcs_he & rkcs_scp & '0' & rkcs_iba & rkcs_fmt & rkcs_exb & rkcs_sse & rkcs_rdy & rkcs_ide & rkcs_mex & rkcs_fu & rkcs_go;
-                     end if;
-
-   -- actual read itself, including moving the data to core. must be bus master at this point.
-
-                  when sd_read_data =>
-                     if counter = 0 then
-                        counter <= 15;
-                        work_bar <= work_bar + 1;
-                        if have_rh70 = 1 then
-                           rh70_bus_master_addr <= work_bar & '0';
-                           rh70_bus_master_dato <= sd_temp(6 downto 0) & sdcard_miso & sd_temp(14 downto 7);
+                        if unsigned(wcp) >= unsigned'("0000000100000000") then
+                           sectorcounter <= "011111111";           -- 255
                         else
-                           bus_master_addr <= work_bar(17 downto 1) & '0';
-                           bus_master_dato <= sd_temp(6 downto 0) & sdcard_miso & sd_temp(14 downto 7);
+                           sectorcounter <= '0' & (unsigned(wcp(7 downto 0)) - unsigned'("00000001"));
                         end if;
-                        if rmcs1_fnc = "11100" or rmcs1_fnc = "11101" then
-                           if have_rh70 = 1 then
-                              rh70_bus_master_control_dati <= '0';
-                              rh70_bus_master_control_dato <= '1';
-                           else
-                              bus_master_control_dati <= '0';
-                              bus_master_control_dato <= '1';
-                           end if;
-                        end if;
-                        if sectorcounter = 0 then
-                           sd_state <= sd_read_rest;
-                        else
-                           sectorcounter <= sectorcounter - 1;
-                           blockcounter <= blockcounter - 1;
-                        end if;
-                     else
-                        if bus_master_nxm = '1' and have_rh70 = 0 then
-                           sd_state <= sd_error_nxm;
-                        end if;
-                        if rh70_bus_master_nxm = '1' and have_rh70 = 1 then
-                           sd_state <= sd_error_nxm;
-                        end if;
-                        if have_rh70 = 1 then
-                           rh70_bus_master_control_dati <= '0';
-                           rh70_bus_master_control_dato <= '0';
-                        else
-                           bus_master_control_dati <= '0';
-                           bus_master_control_dato <= '0';
-                        end if;
-                        sd_temp <= sd_temp(14 downto 0) & sdcard_miso;
-                        counter <= counter - 1;
+
+                        sdcard_xfer_addr <= 0;
+                        sdcard_xfer_read <= '1';
                      end if;
+                  end if;
 
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "0101";
-                     end if;
 
-   -- skip the rest of the sdcard sector
+               when busmaster_read1 =>
+                  busmaster_state <= busmaster_read;
+                  if have_rh70 = 1 then
+                     rh70_bus_master_addr <= work_bar & '0';
+                     rh70_bus_master_dato <= sdcard_xfer_out;
+                  else
+                     bus_master_addr <= work_bar(17 downto 1) & '0';
+                     bus_master_dato <= sdcard_xfer_out;
+                  end if;
+                  sdcard_xfer_addr <= sdcard_xfer_addr + 1;
 
-                  when sd_read_rest =>
-                     if counter = 0 then
-                        counter <= 15;
-                        if blockcounter = 0 then
-                           counter <= 31;
-                           sd_state <= sd_wait;
-                           sd_nextstate <= sd_read_done;
-                        else
-                           blockcounter <= blockcounter - 1;
-                        end if;
-                     else
-                        counter <= counter - 1;
-                     end if;
---                      if bus_master_nxm = '1' then
---                         sd_state <= sd_error_nxm;
---                      end if;
-                     if have_rh70 = 1 then
-                        rh70_bus_master_control_dati <= '0';
-                        rh70_bus_master_control_dato <= '0';
-                     else
-                        bus_master_control_dati <= '0';
-                        bus_master_control_dato <= '0';
-                     end if;
 
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "0110";
-                     end if;
+               when busmaster_read =>
+                  if sectorcounter /= "000000000" then
+                     work_bar <= work_bar + 1;
+                     sdcard_xfer_addr <= sdcard_xfer_addr + 1;
+                     sectorcounter <= sectorcounter - 1;
+                  else
+                     busmaster_state <= busmaster_read_done;
+                     work_bar <= work_bar + 1;
+                  end if;
 
-   -- read done, wait for controller to wake up and allow us on to idle state
+                  if have_rh70 = 1 then
+                     rh70_bus_master_control_dati <= '0';
+                     rh70_bus_master_control_dato <= '1';
+                     rh70_bus_master_addr <= work_bar & '0';
+                     rh70_bus_master_dato <= sdcard_xfer_out;
+                  else
+                     bus_master_control_dati <= '0';
+                     bus_master_control_dato <= '1';
+                     bus_master_addr <= work_bar(17 downto 1) & '0';
+                     bus_master_dato <= sdcard_xfer_out;
+                  end if;
 
-                  when sd_read_done =>
-                     if start_read = '0' then
-                        sd_state <= sd_idle;
-                     end if;
+                  if bus_master_nxm = '1' and have_rh70 = 0 then
+                     nxm <= '1';
+                     busmaster_state <= busmaster_read_done;
+                  end if;
+                  if rh70_bus_master_nxm = '1' and have_rh70 = 1 then
+                     nxm <= '1';
+                     busmaster_state <= busmaster_read_done;
+                  end if;
 
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "0111";
-                     end if;
 
-   -- send a write data command to the card
+               when busmaster_read_done =>
+                  npr <= '0';
+                  sdcard_xfer_read <= '0';
+                  sdcard_read_ack <= '1';
+                  if have_rh70 = 1 then
+                     rh70_bus_master_control_dati <= '0';
+                     rh70_bus_master_control_dato <= '0';
+                  else
+                     bus_master_control_dati <= '0';
+                     bus_master_control_dato <= '0';
+                  end if;
+                  if sdcard_read_ack = '1' and sdcard_read_done = '0' then
+                     busmaster_state <= busmaster_idle;
+                     sdcard_read_ack <= '0';
+                  end if;
 
-                  when sd_write =>
-                     if rmcs1_fnc = "11001" then
-                        work_bar <= (rmbae & rmba(15 downto 1)) + 2;
-                     else
-                        work_bar <= rmbae & rmba(15 downto 1);
-                     end if;
-                     sd_cmd <= x"58" & sd_addr & "000000000" & x"0f";
-                     sd_nextstate <= sd_write_checkresponse;
-                     counter <= 48;
-                     sd_state <= sd_send_cmd;
 
-                     if have_rh_debug = 1 then
---                        bus_master_addr <= "00" & rkda_dr & rkda_cy & rkda_hd & rkda_sc;
-                        sdcard_debug <= "1000";
-                     end if;
+               when busmaster_write1 =>
+                  busmaster_state <= busmaster_write;
+                  sdcard_xfer_write <= '0';
+                  sdcard_xfer_addr <= 0;
+                  if have_rh70 = 1 then
+                     rh70_bus_master_addr <= work_bar & '0';
+                     rh70_bus_master_control_dati <= '1';
+                  else
+                     bus_master_addr <= work_bar(17 downto 1) & '0';
+                     bus_master_control_dati <= '1';
+                  end if;
+                  work_bar <= work_bar + 1;
 
-   -- check the first response (r1 format) to the write command
 
-                  when sd_write_checkresponse =>
-                     sdcard_mosi <= '1';
-                     if sd_r1 = "0000000" then
-                        counter <= 17;                              -- wait for this many cycles, should correspond to Nwr
-                        sd_state <= sd_write_data_waitstart;
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-                     if have_rh_debug = 1 then
-                        if have_rh70 = 1 then
-                           rh70_bus_master_addr <= "000000" & wcp;
-                        else
-                           bus_master_addr <= "00" & wcp;
-                        end if;
-                     end if;
-
-   -- wait for a while before starting the actual data block
-
-                  when sd_write_data_waitstart =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        sd_state <= sd_write_data_startblock;
-                     end if;
-
-   -- send a start block token, note that the token is actually 1111 1110, but the first 6 bits should already have been sent by waitstart. This state sends another 1, and leaves sending the final 0 over to the next state.
-
-                  when sd_write_data_startblock =>
-                     sd_temp <= "0000000000000000";
-                     counter <= 1;
-                     sd_state <= sd_write_data;
-                     blockcounter <= 256;                      -- 256 words = 512 bytes
-                     if unsigned(wcp) >= unsigned'("0000000100000000") then
-                        sectorcounter <= "100000000";           -- 256
-                     else
-                        sectorcounter <= '0' & wcp(7 downto 0);
-                     end if;
-
-   -- actually send out the bitstream
-
-                  when sd_write_data =>
-                     if counter = 1 and sectorcounter /= 0 then
-                        if have_rh70 = 1 then
-                           rh70_bus_master_control_dati <= '1';
-                           rh70_bus_master_control_dato <= '0';
-                           rh70_bus_master_addr <= work_bar & '0';
-                        else
-                           bus_master_control_dati <= '1';
-                           bus_master_control_dato <= '0';
-                           bus_master_addr <= work_bar(17 downto 1) & '0';
-                        end if;
+               when busmaster_write =>
+                  if sdcard_xfer_write = '1' then
+                     sectorcounter <= sectorcounter - 1;
+                     sdcard_xfer_addr <= sdcard_xfer_addr + 1;
+                  end if;
+                  if sectorcounter /= "000000000" then
+                     if sectorcounter /= "000000001" then
                         work_bar <= work_bar + 1;
                      end if;
-                     if counter = 0 then
-                        if have_rh70 = 1 then
-                           sd_temp(15 downto 9) <= rh70_bus_master_dati(6 downto 0);
-                           sd_temp(8 downto 1) <= rh70_bus_master_dati(15 downto 8);
-                           sd_temp(0) <= '0';
-                           rh70_bus_master_control_dati <= '0';
-                           sdcard_mosi <= rh70_bus_master_dati(7);
-                           if have_rh_debug = 1 then
-                              rh70_bus_master_addr(15 downto 0) <= rh70_bus_master_dati;          -- echo data for debugging
-                           end if;
-                        else
-                           sd_temp(15 downto 9) <= bus_master_dati(6 downto 0);
-                           sd_temp(8 downto 1) <= bus_master_dati(15 downto 8);
-                           sd_temp(0) <= '0';
-                           bus_master_control_dati <= '0';
-                           sdcard_mosi <= bus_master_dati(7);
-                           if have_rh_debug = 1 then
-                              bus_master_addr(15 downto 0) <= bus_master_dati;          -- echo data for debugging
-                           end if;
-                        end if;
-                        counter <= 15;
-                        if sectorcounter = 0 then
-                           if blockcounter = 0 then
-                              sd_state <= sd_write_crc;
-                           else
-                              sd_state <= sd_write_rest;
-                           end if;
-                        else
-                           sectorcounter <= sectorcounter - 1;
-                           blockcounter <= blockcounter - 1;
-                        end if;
-                        if bus_master_nxm = '1' and have_rh70 = 0 then
-                           sd_state <= sd_error_nxm;
-                        end if;
-                        if rh70_bus_master_nxm = '1' and have_rh70 = 1 then
-                           sd_state <= sd_error_nxm;
-                        end if;
+                     if have_rh70 = 1 then
+                        rh70_bus_master_addr <= work_bar & '0';
+                        rh70_bus_master_control_dati <= '1';
+                        sdcard_xfer_in <= rh70_bus_master_dati;
+                        sdcard_xfer_write <= '1';
                      else
-                        sdcard_mosi <= sd_temp(15);
-                        counter <= counter - 1;
-                        sd_temp <= sd_temp(14 downto 0) & '0';
+                        bus_master_addr <= work_bar(17 downto 1) & '0';
+                        bus_master_control_dati <= '1';
+                        sdcard_xfer_in <= bus_master_dati;
+                        sdcard_xfer_write <= '1';
                      end if;
-
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "1001";
-                     end if;
-
-   -- send out rest of the bitstream, comprising of zeros to fill the block
-
-                  when sd_write_rest =>
-                     if counter = 0 then
-                        counter <= 15;
-                        sdcard_mosi <= '0';
-                        if blockcounter = 0 then
-                           counter <= 15;                            -- 16 crc bits to write
-                           sdcard_mosi <= '1';
-                           sd_state <= sd_write_crc;
-                        else
-                           blockcounter <= blockcounter - 1;
-                        end if;
-                     else
-                        counter <= counter - 1;
-                     end if;
-
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "1010";
-                     end if;
-
-   -- write crc bits, these will be ignored
-
-                  when sd_write_crc =>
-                     if counter = 0 then
-                        counter <= 7;
-                        sd_state <= sd_write_readcardresponse;
-                        sdcard_mosi <= '0';
-                     else
-                        counter <= counter - 1;
-                     end if;
-
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "1010";
-                     end if;
-
-   -- read card response token
-
-                  when sd_write_readcardresponse =>
-                     sd_dr(0) <= sdcard_miso;
-                     sdcard_mosi <= '1';                               -- from this point on, mosi should probably be high
-                     if counter < 3 then
-                        sd_dr(3 downto 1) <= sd_dr(2 downto 0);
-                     end if;
-                     if counter = 0 then
---                         counter <= 65535;
-                        sd_state <= sd_write_waitcardready;
-                     else
-                        counter <= counter - 1;
-                     end if;
-
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "1011";
-                     end if;
-
-   -- wait for card to signal ready
-
-                  when sd_write_waitcardready =>
---                      if counter = 0 then
-   --                     sd_state <= sd_error;                     -- FIXME, should not be commented out
---                      else
---                         counter <= counter - 1;
---                         if have_rh_debug = 1 then
---                            bus_master_addr(3 downto 0) <= sd_dr;                -- FIXME, check the card response
---                         end if;
---                      end if;
-                     if sdcard_miso = '1' then
-                        counter <= 31;
-                        sd_state <= sd_wait;
-                        sd_nextstate <= sd_write_done;
-                     end if;
-
-   -- write done, wait for controller to wake up and allow us on to idle state
-
-                  when sd_write_done =>
-                     if start_write = '0' then
-                        sd_state <= sd_idle;
-                     end if;
-
-   -- idle, wait for the controller to signal us to do some work
-
-                  when sd_idle =>
-                     if start_write = '1' then
-                        sd_state <= sd_write;
-                     end if;
-                     if start_read = '1' then
-                        sd_state <= sd_read;
-                     end if;
-
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "0000";
-                     end if;
-
-   -- here is where we end when the wrong thing happened; wait till the controller has noticed, setup to rest some cycles, then restart
-
-                  when sd_error_nxm =>
+                  else
+                     busmaster_state <= busmaster_write_wait;
+--                     sdcard_xfer_in <= bus_master_dati;
+                     sdcard_xfer_write <= '0';
                      if have_rh70 = 1 then
                         rh70_bus_master_control_dati <= '0';
-                        rh70_bus_master_control_dato <= '0';
                      else
                         bus_master_control_dati <= '0';
-                        bus_master_control_dato <= '0';
                      end if;
-                     if start_read = '0' and start_write = '0' then
-                        counter <= 4;
-                        sd_state <= sd_error_recover;
-                     end if;
+                  end if;
 
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "1110";
-                     end if;
 
-                  when sd_error =>
-                     if start_read = '0' and start_write = '0' then
-                        counter <= 4;
-                        sd_state <= sd_error_recover;
-                     end if;
+               when busmaster_write_wait =>
+                  npr <= '0';
+                  sdcard_write_start <= '1';
+                  sdcard_xfer_write <= '0';
+                  if sdcard_write_done = '1' then
+                     busmaster_state <= busmaster_write_done;
+                     sdcard_write_start <= '0';
+                  end if;
 
-                     if have_rh_debug = 1 then
-                        sdcard_debug <= "1111";
-                     end if;
 
-   -- countdown some time and then try to reset the card
+               when busmaster_write_done =>
+                  sdcard_write_ack <= '1';
+                  if sdcard_write_ack = '1' and sdcard_write_done = '0' then
+                     busmaster_state <= busmaster_idle;
+                     sdcard_write_ack <= '0';
+                  end if;
 
-                  when sd_error_recover =>
-                     sdcard_cs <= '0';
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        sd_state <= sd_reset;
-                     end if;
+               when others =>
 
-   -- clock out what is in the sd_cmd, then setup to wait for a r1 response
-
-                  when sd_send_cmd =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                        sdcard_mosi <= sd_cmd(47);
-                        sd_cmd <= sd_cmd(46 downto 0) & '1';
-                     else
-                        counter <= 255;
-                        sd_state <= sd_readr1wait;
-                     end if;
-
-   -- clock out what in in the sd_cmd
-
-                  when sd_send_cmd_noresponse =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                        sdcard_mosi <= sd_cmd(47);
-                        sd_cmd <= sd_cmd(46 downto 0) & '1';
-                     else
-                        counter <= 16;
-                        sd_state <= sd_wait;
-                     end if;
-
-   -- wait to read an r1 response token from the card
-
-                  when sd_readr1wait =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                        if sdcard_miso = '0' then
-                           sd_state <= sd_readr1;
-                           counter <= 7;
-                           sd_r1 <= (others => '1');
-                        end if;
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-   -- read the r1 token
-
-                  when sd_readr1 =>
-                     if counter /= 0 then
-                        sd_r1 <= sd_r1(5 downto 0) & sdcard_miso;
-                        counter <= counter - 1;
-                     else
-                        counter <= 8;
-                        sd_state <= sd_wait;
-                     end if;
-
-   -- wait some cycles after a command sequence, this seems to improve stability across card types
-
-                  when sd_wait =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        sd_state <= sd_nextstate;
-                     end if;
-
-   -- catchall
-
-                  when others =>
-                     sd_state <= sd_reset;
-
-               end case;
-
-            end if;
+            end case;
 
          end if;
       end if;

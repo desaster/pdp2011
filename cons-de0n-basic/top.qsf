@@ -1,17 +1,17 @@
 # -------------------------------------------------------------------------- #
 #
 # Copyright (C) 1991-2011 Altera Corporation
-# Your use of Altera Corporation's design tools, logic functions 
-# and other software and tools, and its AMPP partner logic 
-# functions, and any output files from any of the foregoing 
-# (including device programming or simulation files), and any 
-# associated documentation or information are expressly subject 
-# to the terms and conditions of the Altera Program License 
-# Subscription Agreement, Altera MegaCore Function License 
-# Agreement, or other applicable license agreement, including, 
-# without limitation, that your use is for the sole purpose of 
-# programming logic devices manufactured by Altera and sold by 
-# Altera or its authorized distributors.  Please refer to the 
+# Your use of Altera Corporation's design tools, logic functions
+# and other software and tools, and its AMPP partner logic
+# functions, and any output files from any of the foregoing
+# (including device programming or simulation files), and any
+# associated documentation or information are expressly subject
+# to the terms and conditions of the Altera Program License
+# Subscription Agreement, Altera MegaCore Function License
+# Agreement, or other applicable license agreement, including,
+# without limitation, that your use is for the sole purpose of
+# programming logic devices manufactured by Altera and sold by
+# Altera or its authorized distributors.  Please refer to the
 # applicable agreement for further details.
 #
 # -------------------------------------------------------------------------- #
@@ -99,10 +99,10 @@ set_location_assignment PIN_R11 -to sdcard_miso
 set_location_assignment PIN_L16 -to sdcard_mosi
 set_location_assignment PIN_N9 -to sdcard_sclk
 set_location_assignment PIN_N11 -to sdcard_cs
-set_location_assignment PIN_T9 -to rx1
-set_location_assignment PIN_R9 -to rx2
-set_location_assignment PIN_F13 -to tx1
-set_location_assignment PIN_T15 -to tx2
+set_location_assignment PIN_T9 -to rx
+set_location_assignment PIN_R9 -to rx1
+set_location_assignment PIN_F13 -to tx
+set_location_assignment PIN_T15 -to tx1
 
 # Classic Timing Assignments
 # ==========================
@@ -157,10 +157,8 @@ set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
 
 # end ENTITY(top)
 # ---------------
-set_location_assignment PIN_T11 -to cts1
-set_location_assignment PIN_D11 -to cts2
-set_location_assignment PIN_T12 -to rts1
-set_location_assignment PIN_A12 -to rts2
+set_location_assignment PIN_T11 -to cts
+set_location_assignment PIN_T12 -to rts
 set_location_assignment PIN_N14 -to xu_cs
 set_location_assignment PIN_M10 -to xu_miso
 set_location_assignment PIN_N16 -to xu_mosi
@@ -216,6 +214,7 @@ set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[0]
 set_global_assignment -name ENABLE_SIGNALTAP OFF
 set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
 set_global_assignment -name SLD_FILE "/home/sytse/vhdl/pdp11i/cons-de0n-basic/stp1_auto_stripped.stp"
+set_global_assignment -name VHDL_FILE ../sdspi.vhd
 set_global_assignment -name VHDL_FILE ../m9312h47.vhd
 set_global_assignment -name VHDL_FILE ../m9312l47.vhd
 set_global_assignment -name VHDL_FILE ../dr11c.vhd

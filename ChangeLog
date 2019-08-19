@@ -1,4 +1,127 @@
 
+
+6/24
+- tried to get rk core converted quickly - that hasn't worked. Need to get
+  back to it after the summer break.
+- finishing up the rh, integrating the branch that I've been working on back
+  into the main branch.
+- wondering about the core usage of old vs new:
+      rh11: lcc   lcr   mem
+      old: 1158   384     0
+      new  1441   522    8K
+  so yes, the new core is 'a bit' bigger than the old. Probably not too much
+  of a surprise, since it takes the extra step of storing everything in the
+  2x4K buffers in between things.
+  definitely not a showstopper though - the reduced bus hogging and hc/xd support
+  are more than worth it.
+
+
+6/12
+- finishing up rh core
+- started rk core, not there yet - lots of things to do with rk crazyness.
+- some more benchmarking ;-) comparing different cards this time. All are microsd,
+  running make on 211BSD PDP2011, on the de0nano 140/14=10 - without pidp11 console.
+
+san grey   1070.8 real       628.7 user       152.9 sys     (Sandisk Ultra Class-10 UHS1 16GB 'up to 80MB/s')
+san red    1059.8 real       626.9 user       155.4 sys     (Sandisk Ultra Class-10 UHS1 16GB 'up to 98MB/s')
+adata      1020.6 real       633.1 user       152.6 sys     (Adata Premier UHS-1 Class-10 16GB)
+transcend  1053.4 real       632.7 user       151.7 sys     (Transcend Premium UHS1 32Gb 'up to 90B/s')
+kingston   1047.0 real       630.2 user       152.7 sys     (Kingston Class-4 8GB)
+san old    1897.0 real       623.1 user       149.2 sys     (Sandisk SD (not HC) 512Mb >10 years old)
+
+tried ftp speed: 170Kbps new (de0n/140/14=10)
+              vs 100Kbps old (de0n/100/14=7.14)
+
+6/11
+- some more benchmarking:
+
+de0n old : 1624.8 real       945.2 user       496.0 sys     (100/14=7.14)
+de0n new : 1570.4 real      1000.6 user       263.3 sys     (90/14=6.42)
+de270    : 1364.6 real       852.9 user       217.4 sys     (60/8=7.5)
+de0n new : 1082.8 real       626.4 user       159.4 sys     (140/14=10 - without pidp11 console)
+- finishing up work on the spi controller; added debug/status led
+  outputs, error reporting.
+- set the card high speed to 25Mhz, initial tests look promising
+           1070.8 real       628.7 user       152.9 sys     (140/14=10,25)
+  but it doesn't seem to make a very big difference. Maybe with
+  other cards. Still, 12 seconds ;-)
+- tried to add multiple drives to rh, but it proves to be
+  nontrivial - it seems that I'd have to implement multiple
+  sets of the drive registers to make that work. Hmm.
+
+
+
+6/10
+- after some debugging sessions - and apparently those
+  took a while ;-) but I've now fixed the problems that
+  were still hampering the new nice disk controllers.
+  Needs some cleaning up, and also an explanation why
+  writecrc needs counter 8. But that it works seems
+  above doubt, already.
+
+  ran three boards with make on 211BSD PDP2011,
+de0n old : 1624.8 real       945.2 user       496.0 sys     (100/14=7.14)
+de0n new : 1570.4 real      1000.6 user       263.3 sys     (90/14=6.42)
+de270    : 1364.6 real       852.9 user       217.4 sys     (60/8=7.5)
+
+  and while those timings don't necessarily reflect what
+  those boards are capable of, it does tell the story. de0n old is
+  running the faster cpu, but its card is slow, so it still takes
+  a lot longer - and it's cpu is locked a lot of the time. But while
+  de0n new takes about 10% more user cpu time, it's cpu is maybe slow
+  but locked much less, and it finishes about a minute early. And
+  with its old but apparently fast full size sdhc card, de270 gets
+  there first - lots of resources, no timing constraints at all,
+  that's got to help too.
+
+
+3/21
+- added a branch for the new disk controllers - did so
+  before, but made a mistake...
+- after the earlier problem with reading the first
+  sector twice in a row, now I had an issue with
+  skipping the first sector. Turned out to be a
+  wrong reset condition that only became obvious
+  through testing with the x46 boot code.
+
+
+3/14
+- reorganized de1dram and de270
+- working on the improved sd card interface. Not as easy
+  as I hoped - interfacing the card is quite ok already,
+  but the disk controller interaction is cumbersome.
+
+
+3/10
+- reorganized the top sources for de0n and de0cv a bit, put
+  things in order and made the naming of the console signals
+  consistent over the boards.
+- the order is: console, sd, xu, panel, dram/sram, board
+  specific stuff like leds and switches, resets, clocks;
+  this goes for the port list to the outside world, but also
+  for the instantiation list on the pdp11 component.
+  Next step is to lift out all config stuff, and put that
+  above the pdp11 component.
+- the console signals should be named rx/tx/cts/rts without
+  sequence numbers for the console port; sequence number
+  added for other ports, starting with 1.
+
+
+3/6
+- got de0cv to work properly, with quartus 18.1 and the much
+  newer pll version that comes with that.
+- setup de0cv and de10-lite with the new standardised pinout
+  for the console and peripherals.
+- tested de0cv at higher clock speeds, got up to 11.5 something
+  at the cpu (maybe 12.5 too, but the sd card didn't want to
+  play). That's 175 at the sdram though, and that's rated for
+  133. Still, lots of potential ;-)
+  Hooked up and had a look at signal integrity, looks way better
+  than I remember from before.
+- changed reset button on de0cv to the provided fpga reset btn,
+  instead of key0
+
+
 2/28
 - made ready for release of the console preview
 
@@ -35,16 +158,22 @@ mubas wave program:
 - eliminated most other differences between the Ms Piggy
   movies and the current core - adrs err works again, exa-ing
   into the registers is now an adrs err.
-  2) PDP2011 does not show subsequent memory fetches from the instruction stream in the bus register. Maybe easy to add for most cases - but also a lot of logic? Need to think
+  2) PDP2011 does not show subsequent memory fetches from the
+     instruction stream in the bus register. Maybe easy to add
+     for most cases - but also a lot of logic? Need to think
      about this. Same as for the uaddr displays, probably.
   Still need to check the virtual address modes and prog phy!
 
 
 1/21
 - (Re)Check against the lcm videos that Oscar and Joerg made.
-  1) PDP2011 does not light the pause led for memory access. A real machine would, but only on a cache miss. This is why this is not visible in the Ms Piggy videos.
-     It is actually quite simple to add lighting the pause led to PDP2011, but since there is no cache, it would mean that the led would be on all the time - and that
-     doesn't seem right; so I decided to leave this as a known difference.
+  1) PDP2011 does not light the pause led for memory access. A
+     real machine would, but only on a cache miss. This is why
+     this is not visible in the Ms Piggy videos. It is actually
+     quite simple to add lighting the pause led to PDP2011, but
+     since there is no cache, it would mean that the led would
+     be on all the time - and that doesn't seem right; so I
+     decided to leave this as a known difference.
 
 
 1/20
