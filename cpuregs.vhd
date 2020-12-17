@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.21 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -58,27 +58,7 @@ signal regs : mem_type := mem_type'(
 signal r_loc : std_logic_vector(3 downto 0);
 signal w_loc : std_logic_vector(3 downto 0);
 
-signal r0k : std_logic_vector(15 downto 0);
-signal r1k : std_logic_vector(15 downto 0);
-signal r2k : std_logic_vector(15 downto 0);
-signal r3k : std_logic_vector(15 downto 0);
-signal r4k : std_logic_vector(15 downto 0);
-signal r5k : std_logic_vector(15 downto 0);
-signal r6k : std_logic_vector(15 downto 0);
-signal r6s : std_logic_vector(15 downto 0);
-signal r6u : std_logic_vector(15 downto 0);
-
 begin
-
-   r0k <= regs(conv_integer(0));
-   r1k <= regs(conv_integer(1));
-   r2k <= regs(conv_integer(2));
-   r3k <= regs(conv_integer(3));
-   r4k <= regs(conv_integer(4));
-   r5k <= regs(conv_integer(5));
-   r6k <= regs(conv_integer(6));
-   r6s <= regs(conv_integer(14));
-   r6u <= regs(conv_integer(15));
 
    r0 <= regs(conv_integer(0)) when r0s = '0' else
        regs(conv_integer(8));

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.17 $
+-- $Revision$
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -70,22 +70,7 @@ signal fpreg4 : fp_type := fp_type'(
 signal r_loc : std_logic_vector(2 downto 0);
 signal w_loc : std_logic_vector(2 downto 0);
 
-signal ac0 : std_logic_vector(63 downto 0);
-signal ac1 : std_logic_vector(63 downto 0);
-signal ac2 : std_logic_vector(63 downto 0);
-signal ac3 : std_logic_vector(63 downto 0);
-signal ac4 : std_logic_vector(63 downto 0);
-signal ac5 : std_logic_vector(63 downto 0);
-
-
 begin
-
-   ac0 <= fpreg1(conv_integer("0")) & fpreg2(conv_integer("0")) & fpreg3(conv_integer("0")) & fpreg4(conv_integer("0"));
-   ac1 <= fpreg1(conv_integer("1")) & fpreg2(conv_integer("1")) & fpreg3(conv_integer("1")) & fpreg4(conv_integer("1"));
-   ac2 <= fpreg1(conv_integer("10")) & fpreg2(conv_integer("10")) & fpreg3(conv_integer("10")) & fpreg4(conv_integer("10"));
-   ac3 <= fpreg1(conv_integer("11")) & fpreg2(conv_integer("11")) & fpreg3(conv_integer("11")) & fpreg4(conv_integer("11"));
-   ac4 <= fpreg1(conv_integer("100")) & fpreg2(conv_integer("100")) & fpreg3(conv_integer("100")) & fpreg4(conv_integer("100"));
-   ac5 <= fpreg1(conv_integer("101")) & fpreg2(conv_integer("101")) & fpreg3(conv_integer("101")) & fpreg4(conv_integer("101"));
 
    r_loc <= raddr;
    w_loc <= waddr;

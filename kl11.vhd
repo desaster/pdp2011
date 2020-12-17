@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.18 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -612,6 +612,10 @@ begin
                   end if;
 
                end if;
+
+            else
+
+               tx <= '1';
 
             end if;
 

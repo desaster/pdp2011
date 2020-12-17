@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.94 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -37,7 +37,6 @@ entity unibus is
 
 -- rl controller
       have_rl : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rl_debug : in integer range 0 to 1 := 1;                  -- enable debug core
       rl_sdcard_cs : out std_logic;
       rl_sdcard_mosi : out std_logic;
       rl_sdcard_sclk : out std_logic;
@@ -46,9 +45,7 @@ entity unibus is
 
 -- rk controller
       have_rk : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rk_debug : in integer range 0 to 2 := 1;                  -- enable debug core; 0=none; 1=all; 2=debug blinkenlights only
       have_rk_num : in integer range 1 to 8 := 8;                    -- active number of drives on the controller; set to < 8 to save core
-      have_rk_minimal : in integer range 0 to 1 := 0;                -- 1 for smaller core, but not very compatible controller. Useful to fit s3b200 only
       rk_sdcard_cs : out std_logic;
       rk_sdcard_mosi : out std_logic;
       rk_sdcard_sclk : out std_logic;
@@ -57,12 +54,12 @@ entity unibus is
 
 -- rh controller
       have_rh : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rh_debug : in integer range 0 to 1 := 1;                  -- enable debug core
       rh_sdcard_cs : out std_logic;
       rh_sdcard_mosi : out std_logic;
       rh_sdcard_sclk : out std_logic;
       rh_sdcard_miso : in std_logic := '0';
       rh_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
+      rh_type : in integer range 4 to 7 := 6;
 
 -- xu enc424j600 controller interface
       have_xu : in integer range 0 to 1 := 0;                        -- enable conditional compilation
@@ -125,6 +122,38 @@ entity unibus is
       dr11c_ndrhi : out std_logic;                                   -- new data ready : dr11c_out(15 downto 8) has new data
       dr11c_dxm : out std_logic;                                     -- data transmitted : dr11c_in data has been read by the cpu
       dr11c_init : out std_logic;                                    -- unibus reset propagated out to the user device
+
+-- minc-11
+
+      have_mncad : in integer range 0 to 1 := 0;                     -- mncad: a/d, max one card in a system
+      have_mnckw : in integer range 0 to 2 := 0;                     -- mnckw: clock, either one or two
+      have_mncaa : in integer range 0 to 1 := 0;                     -- mncaa: d/a
+      have_mncdi : in integer range 0 to 1 := 0;                     -- mncdo: digital in
+      have_mncdo : in integer range 0 to 1 := 0;                     -- mncdo: digital out
+      ad_start : out std_logic;                                      -- interface from mncad to a/d hardware : '1' signals to start converting
+      ad_done : in std_logic := '1';                                 -- interface from mncad to a/d hardware : '1' signals to the mncad that the a/d has completed a conversion
+      ad_channel : out std_logic_vector(5 downto 0);                 -- interface from mncad to a/d hardware : the channel number for the current command
+      ad_nxc : in std_logic := '1';                                  -- interface from mncad to a/d hardware : '1' signals to the mncad that the required channel does not exist
+      ad_sample : in std_logic_vector(11 downto 0) := "000000000000";-- interface from mncad to a/d hardware : the value of the last sample
+      kw_st1in : in std_logic := '0';                                -- mnckw0 st1 signal input, active on rising edge
+      kw_st2in : in std_logic := '0';                                -- mnckw0 st2 signal input, active on rising edge
+      kw_st1out : out std_logic;                                     -- mnckw0 st1 output pulse (actually : copy of the st1flag in the csr
+      kw_st2out : out std_logic;                                     -- mnckw0 st2 output pulse
+      kw_clkov : out std_logic;                                      -- mnckw0 clkovf output pulse
+      da_dac1 : out std_logic_vector(11 downto 0);
+      da_dac2 : out std_logic_vector(11 downto 0);
+      da_dac3 : out std_logic_vector(11 downto 0);
+      da_dac4 : out std_logic_vector(11 downto 0);
+      have_diloopback : in integer range 0 to 1 := 0;                -- set to 1 to loop back mncdo0 to mncdi0 internally for testing
+      di_dir : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi0 data input register
+      di_strobe : in std_logic := '0';
+      di_reply : out std_logic;
+      di_pgmout : out std_logic;
+      di_event : out std_logic;
+      do_dor : out std_logic_vector(15 downto 0);
+      do_hb_strobe : out std_logic;
+      do_lb_strobe : out std_logic;
+      do_reply : in std_logic := '0';
 
 -- cpu console, switches and display register
       have_csdr : in integer range 0 to 1 := 1;
@@ -297,6 +326,11 @@ component mmu is
       sr3csmenable : out std_logic;
       ifetch : in std_logic;
 
+      -- lma (f11)
+      mmu_lma_c1 : out std_logic;
+      mmu_lma_c0 : out std_logic;
+      mmu_lma_eub : out std_logic_vector(21 downto 0);
+
       bus_unibus_mapped : out std_logic;
 
       bus_addr : out std_logic_vector(21 downto 0);
@@ -333,6 +367,7 @@ component mmu is
 
       modelcode : in integer range 0 to 255;
       sr0out_debug : out std_logic_vector(15 downto 0);
+      have_odd_abort : out integer range 0 to 255;
 
       psw : in std_logic_vector(15 downto 0);
       id : in std_logic;
@@ -370,6 +405,11 @@ component cr is
       cpu_iobus_timeout : in std_logic;
       cpu_ysv : in std_logic;
       cpu_rsv : in std_logic;
+
+-- lma (f11)
+      mmu_lma_c1 : in std_logic;
+      mmu_lma_c0 : in std_logic;
+      mmu_lma_eub : in std_logic_vector(21 downto 0);
 
 -- maintenance register (j11)
       cpu_kmillhalt : out std_logic;
@@ -529,9 +569,9 @@ component rl11 is
       sdcard_debug : out std_logic_vector(3 downto 0);
 
       have_rl : in integer range 0 to 1;
-      have_rl_debug : in integer range 0 to 1;
       reset : in std_logic;
-      sdclock : in std_logic;
+      clk50mhz : in std_logic;
+      nclk : in std_logic;
       clk : in std_logic
    );
 end component;
@@ -570,11 +610,10 @@ component rk11 is
       sdcard_debug : out std_logic_vector(3 downto 0);
 
       have_rk : in integer range 0 to 1;
-      have_rk_debug : in integer range 0 to 2;
       have_rk_num : in integer range 1 to 8;
-      have_rk_minimal : in integer range 0 to 1;
       reset : in std_logic;
-      sdclock : in std_logic;
+      clk50mhz : in std_logic;
+      nclk : in std_logic;
       clk : in std_logic
    );
 end component;
@@ -621,7 +660,7 @@ component rh11 is
 
       have_rh : in integer range 0 to 1 := 0;
       have_rh70 : in integer range 0 to 1 := 0;
-      rmtype : in integer range 4 to 7 := 6;
+      rh_type : in integer range 4 to 7 := 6;
       reset : in std_logic;
       clk50mhz : in std_logic;
       nclk : in std_logic;
@@ -722,6 +761,162 @@ component dr11c is
    );
 end component;
 
+component mncad is
+   port(
+      base_addr : in std_logic_vector(17 downto 0);
+      ivec : in std_logic_vector(8 downto 0);
+
+      br : out std_logic;
+      bg : in std_logic;
+      int_vector : out std_logic_vector(8 downto 0);
+
+      bus_addr_match : out std_logic;
+      bus_addr : in std_logic_vector(17 downto 0);
+      bus_dati : out std_logic_vector(15 downto 0);
+      bus_dato : in std_logic_vector(15 downto 0);
+      bus_control_dati : in std_logic;
+      bus_control_dato : in std_logic;
+      bus_control_datob : in std_logic;
+
+      st1 : in std_logic;
+      clkov : in std_logic;
+
+      ad_start : out std_logic;
+      ad_done : in std_logic := '0';
+      ad_channel : out std_logic_vector(5 downto 0);
+      ad_nxc : in std_logic := '0';
+      ad_sample : in std_logic_vector(11 downto 0) := "000000000000";
+
+      have_mncad : in integer range 0 to 1 := 0;
+
+      reset : in std_logic;
+
+      clk50mhz : in std_logic;
+      clk : in std_logic
+   );
+end component;
+
+component mnckw is
+   port(
+      base_addr : in std_logic_vector(17 downto 0);
+      ivec : in std_logic_vector(8 downto 0);
+
+      br : out std_logic;
+      bg : in std_logic;
+      int_vector : out std_logic_vector(8 downto 0);
+
+      bus_addr_match : out std_logic;
+      bus_addr : in std_logic_vector(17 downto 0);
+      bus_dati : out std_logic_vector(15 downto 0);
+      bus_dato : in std_logic_vector(15 downto 0);
+      bus_control_dati : in std_logic;
+      bus_control_dato : in std_logic;
+      bus_control_datob : in std_logic;
+
+      st1in : in std_logic := '0';
+      st2in : in std_logic := '0';
+      st1out : out std_logic;
+      st2out : out std_logic;
+      clkov : out std_logic;
+
+      have_mnckw : in integer range 0 to 1 := 0;
+
+      reset : in std_logic;
+
+      clk50mhz : in std_logic;
+      clk : in std_logic
+   );
+end component;
+
+
+component mncaa is
+   port(
+      base_addr : in std_logic_vector(17 downto 0);
+
+      bus_addr_match : out std_logic;
+      bus_addr : in std_logic_vector(17 downto 0);
+      bus_dati : out std_logic_vector(15 downto 0);
+      bus_dato : in std_logic_vector(15 downto 0);
+      bus_control_dati : in std_logic;
+      bus_control_dato : in std_logic;
+      bus_control_datob : in std_logic;
+
+      da_dac1 : out std_logic_vector(11 downto 0);
+      da_dac2 : out std_logic_vector(11 downto 0);
+      da_dac3 : out std_logic_vector(11 downto 0);
+      da_dac4 : out std_logic_vector(11 downto 0);
+
+      have_mncaa : in integer range 0 to 1 := 0;
+
+      reset : in std_logic;
+
+      clk50mhz : in std_logic;
+      clk : in std_logic
+   );
+end component;
+
+component mncdi is
+   port(
+      base_addr : in std_logic_vector(17 downto 0);
+      ivec : in std_logic_vector(8 downto 0);
+
+      br : out std_logic;
+      bg : in std_logic;
+      int_vector : out std_logic_vector(8 downto 0);
+
+      bus_addr_match : out std_logic;
+      bus_addr : in std_logic_vector(17 downto 0);
+      bus_dati : out std_logic_vector(15 downto 0);
+      bus_dato : in std_logic_vector(15 downto 0);
+      bus_control_dati : in std_logic;
+      bus_control_dato : in std_logic;
+      bus_control_datob : in std_logic;
+
+      d : in std_logic_vector(15 downto 0) := "0000000000000000";
+      strobe : in std_logic := '0';
+      reply : out std_logic;
+      pgmout : out std_logic;
+      event : out std_logic;
+
+      have_mncdi : in integer range 0 to 1 := 0;
+
+      reset : in std_logic;
+
+      clk50mhz : in std_logic;
+      clk : in std_logic
+   );
+end component;
+
+component mncdo is
+   port(
+      base_addr : in std_logic_vector(17 downto 0);
+      ivec : in std_logic_vector(8 downto 0);
+
+      br : out std_logic;
+      bg : in std_logic;
+      int_vector : out std_logic_vector(8 downto 0);
+
+      bus_addr_match : out std_logic;
+      bus_addr : in std_logic_vector(17 downto 0);
+      bus_dati : out std_logic_vector(15 downto 0);
+      bus_dato : in std_logic_vector(15 downto 0);
+      bus_control_dati : in std_logic;
+      bus_control_dato : in std_logic;
+      bus_control_datob : in std_logic;
+
+      d : out std_logic_vector(15 downto 0);
+      hb_strobe : out std_logic;
+      lb_strobe : out std_logic;
+      reply : in std_logic := '0';
+
+      have_mncdo : in integer range 0 to 1 := 0;
+
+      reset : in std_logic;
+
+      clk50mhz : in std_logic;
+      clk : in std_logic
+   );
+end component;
 
 signal cpu_addr : std_logic_vector(15 downto 0);
 signal cpu_datain : std_logic_vector(15 downto 0);
@@ -812,6 +1007,13 @@ type npr_states is (
 );
 signal npr_state : npr_states := npr_idle;
 
+type br6_states is (
+   br6_kw0,
+   br6_mncad0,
+   br6_idle
+);
+signal br6_state : br6_states := br6_idle;
+
 type br5_states is (
    br5_rh0,
    br5_xu0,
@@ -827,6 +1029,10 @@ type br4_states is (
    br4_kl1,
    br4_kl2,
    br4_kl3,
+   br4_mnckw0,
+   br4_mnckw1,
+   br4_mncdi0,
+   br4_mncdo0,
    br4_idle
 );
 signal br4_state : br4_states := br4_idle;
@@ -950,6 +1156,55 @@ signal dr11c0_ivec : std_logic_vector(8 downto 0);
 signal dr11c0_ivec1 : std_logic_vector(8 downto 0);
 signal dr11c0_ivec2 : std_logic_vector(8 downto 0);
 
+signal mncad0_addr_match : std_logic;
+signal mncad0_dati : std_logic_vector(15 downto 0);
+signal mncad0_bg : std_logic;
+signal mncad0_br : std_logic;
+signal mncad0_ivec : std_logic_vector(8 downto 0);
+
+signal mnckw0_addr_match : std_logic;
+signal mnckw0_dati : std_logic_vector(15 downto 0);
+signal mnckw0_bg : std_logic;
+signal mnckw0_br : std_logic;
+signal mnckw0_ivec : std_logic_vector(8 downto 0);
+signal mnckw0_st1in : std_logic;
+signal mnckw0_st2in : std_logic;
+signal mnckw0_st1out : std_logic;
+signal mnckw0_st2out : std_logic;
+signal mnckw0_clkov : std_logic;
+signal have_mnckw0 : integer range 0 to 1;
+
+signal mnckw1_addr_match : std_logic;
+signal mnckw1_dati : std_logic_vector(15 downto 0);
+signal mnckw1_bg : std_logic;
+signal mnckw1_br : std_logic;
+signal mnckw1_ivec : std_logic_vector(8 downto 0);
+signal have_mnckw1 : integer range 0 to 1;
+
+signal mncaa0_addr_match : std_logic;
+signal mncaa0_dati : std_logic_vector(15 downto 0);
+
+signal mncdi0_addr_match : std_logic;
+signal mncdi0_dati : std_logic_vector(15 downto 0);
+signal mncdi0_bg : std_logic;
+signal mncdi0_br : std_logic;
+signal mncdi0_ivec : std_logic_vector(8 downto 0);
+signal mncdi0_d : std_logic_vector(15 downto 0);
+signal mncdi0_strobe : std_logic;
+signal mncdi0_reply : std_logic;
+signal mncdi0_pgmout : std_logic;
+signal mncdi0_event : std_logic;
+
+signal mncdo0_addr_match : std_logic;
+signal mncdo0_dati : std_logic_vector(15 downto 0);
+signal mncdo0_bg : std_logic;
+signal mncdo0_br : std_logic;
+signal mncdo0_ivec : std_logic_vector(8 downto 0);
+signal mncdo0_d : std_logic_vector(15 downto 0);
+signal mncdo0_hb_strobe : std_logic;
+signal mncdo0_lb_strobe : std_logic;
+signal mncdo0_reply : std_logic;
+
 signal cer_nxmabort : std_logic;
 signal cer_ioabort : std_logic;
 
@@ -957,10 +1212,16 @@ signal cpu_stack_limit : std_logic_vector(15 downto 0);
 signal cpu_kmillhalt : std_logic;
 signal cons_exadep : std_logic;
 
+signal mmu_lma_c0 : std_logic;
+signal mmu_lma_c1 : std_logic;
+signal mmu_lma_eub : std_logic_vector(21 downto 0);
+
 signal cr_addr_match : std_logic;
 signal cr_dati : std_logic_vector(15 downto 0);
 
 signal nclk : std_logic;
+
+signal have_oddabort : integer range 0 to 1;
 
 begin
 
@@ -1060,6 +1321,10 @@ begin
 
       mmuoddabort => mmu_oddabort,
 
+      mmu_lma_c1 => mmu_lma_c1,
+      mmu_lma_c0 => mmu_lma_c0,
+      mmu_lma_eub => mmu_lma_eub,
+
       bus_unibus_mapped => bus_unibus_mapped,
 
       bus_addr => bus_addr,
@@ -1095,6 +1360,7 @@ begin
       cons_id => cons_id,
 
       modelcode => modelcode,
+      have_odd_abort => have_oddabort,
 
       psw => cpu_psw,
       id => cpu_id,
@@ -1126,6 +1392,10 @@ begin
       cpu_iobus_timeout => cer_ioabort,
       cpu_ysv => ysv,
       cpu_rsv => rsv,
+
+      mmu_lma_c1 => mmu_lma_c1,
+      mmu_lma_c0 => mmu_lma_c0,
+      mmu_lma_eub => mmu_lma_eub,
 
       cpu_kmillhalt => cpu_kmillhalt,
 
@@ -1376,12 +1646,11 @@ begin
       sdcard_miso => rl_sdcard_miso,
       sdcard_debug => rl_sdcard_debug,
 
-      sdclock => clk,
-
       have_rl => have_rl,
-      have_rl_debug => have_rl_debug,
       reset => cpu_init,
-      clk => nclk
+      clk50mhz => clk50mhz,
+      nclk => nclk,
+      clk => clk
    );
 
    rk0: rk11 port map(
@@ -1416,14 +1685,12 @@ begin
       sdcard_miso => rk_sdcard_miso,
       sdcard_debug => rk_sdcard_debug,
 
-      sdclock => clk,
-
       have_rk => have_rk,
-      have_rk_debug => have_rk_debug,
       have_rk_num => have_rk_num,
-      have_rk_minimal => have_rk_minimal,
       reset => cpu_init,
-      clk => nclk
+      clk50mhz => clk50mhz,
+      nclk => nclk,
+      clk => clk
    );
 
    rh70_bus_master_nxm <= '1' when addr_match = '0' and cpu_npg = '1' and rh0_npr = '1' and have_rh70 = 1 else '0';
@@ -1465,6 +1732,8 @@ begin
       sdcard_sclk => rh_sdcard_sclk,
       sdcard_miso => rh_sdcard_miso,
       sdcard_debug => rh_sdcard_debug,
+
+      rh_type => rh_type,
 
       have_rh => have_rh,
       have_rh70 => have_rh70,
@@ -1562,6 +1831,190 @@ begin
       clk => nclk
    );
 
+-- minc cards
+
+   mncad0: mncad port map(
+      base_addr => o"771000",
+      ivec => o"400",
+
+      br => mncad0_br,
+      bg => mncad0_bg,
+      int_vector => mncad0_ivec,
+
+      bus_addr_match => mncad0_addr_match,
+      bus_addr => unibus_addr,
+      bus_dati => mncad0_dati,
+      bus_dato => unibus_dato,
+      bus_control_dati => unibus_control_dati,
+      bus_control_dato => unibus_control_dato,
+      bus_control_datob => unibus_control_datob,
+
+      st1 => mnckw0_st1out,
+      clkov => mnckw0_clkov,
+
+      ad_start => ad_start,
+      ad_done => ad_done,
+      ad_channel => ad_channel,
+      ad_nxc => ad_nxc,
+      ad_sample => ad_sample,
+
+      have_mncad => have_mncad,
+
+      clk50mhz => clk50mhz,
+      reset => cpu_init,
+      clk => nclk
+   );
+
+   have_mnckw0 <= 1 when have_mnckw >= 1 else 0;
+   mnckw0: mnckw port map(
+      base_addr => o"771020",
+      ivec => o"440",
+
+      br => mnckw0_br,
+      bg => mnckw0_bg,
+      int_vector => mnckw0_ivec,
+
+      bus_addr_match => mnckw0_addr_match,
+      bus_addr => unibus_addr,
+      bus_dati => mnckw0_dati,
+      bus_dato => unibus_dato,
+      bus_control_dati => unibus_control_dati,
+      bus_control_dato => unibus_control_dato,
+      bus_control_datob => unibus_control_datob,
+
+      st1in => mnckw0_st1in,
+      st2in => mnckw0_st2in,
+      st1out => mnckw0_st1out,
+      st2out => mnckw0_st2out,
+      clkov => mnckw0_clkov,
+
+      have_mnckw => have_mnckw0,
+
+      clk50mhz => clk50mhz,
+      reset => cpu_init,
+      clk => nclk
+   );
+   mnckw0_st1in <= kw_st1in;
+   mnckw0_st2in <= kw_st2in;
+   kw_st1out <= mnckw0_st1out;
+   kw_st2out <= mnckw0_st2out;
+   kw_clkov <= mnckw0_clkov;
+
+   have_mnckw1 <= 1 when have_mnckw >= 2 else 0;
+   mnckw1: mnckw port map(
+      base_addr => o"771024",
+      ivec => o"450",
+
+      br => mnckw1_br,
+      bg => mnckw1_bg,
+      int_vector => mnckw1_ivec,
+
+      bus_addr_match => mnckw1_addr_match,
+      bus_addr => unibus_addr,
+      bus_dati => mnckw1_dati,
+      bus_dato => unibus_dato,
+      bus_control_dati => unibus_control_dati,
+      bus_control_dato => unibus_control_dato,
+      bus_control_datob => unibus_control_datob,
+
+      have_mnckw => have_mnckw1,
+
+      clk50mhz => clk50mhz,
+      reset => cpu_init,
+      clk => nclk
+   );
+
+   mncaa0: mncaa port map(
+      base_addr => o"771060",
+
+      bus_addr_match => mncaa0_addr_match,
+      bus_addr => unibus_addr,
+      bus_dati => mncaa0_dati,
+      bus_dato => unibus_dato,
+      bus_control_dati => unibus_control_dati,
+      bus_control_dato => unibus_control_dato,
+      bus_control_datob => unibus_control_datob,
+
+      da_dac1 => da_dac1,
+      da_dac2 => da_dac2,
+      da_dac3 => da_dac3,
+      da_dac4 => da_dac4,
+
+      have_mncaa => have_mncaa,
+
+      clk50mhz => clk50mhz,
+      reset => cpu_init,
+      clk => nclk
+   );
+
+   mncdi0: mncdi port map(
+      base_addr => o"771160",
+      ivec => o"130",
+
+      br => mncdi0_br,
+      bg => mncdi0_bg,
+      int_vector => mncdi0_ivec,
+
+      bus_addr_match => mncdi0_addr_match,
+      bus_addr => unibus_addr,
+      bus_dati => mncdi0_dati,
+      bus_dato => unibus_dato,
+      bus_control_dati => unibus_control_dati,
+      bus_control_dato => unibus_control_dato,
+      bus_control_datob => unibus_control_datob,
+
+      d => mncdi0_d,
+      strobe => mncdi0_strobe,
+      reply => mncdi0_reply,
+      pgmout => mncdi0_pgmout,
+      event => mncdi0_event,
+
+      have_mncdi => have_mncdi,
+
+      clk50mhz => clk50mhz,
+      reset => cpu_init,
+      clk => nclk
+   );
+   mncdi0_d <= di_dir when have_diloopback = 0 else mncdo0_d;
+   mncdi0_strobe <= di_strobe when have_diloopback = 0 else mncdo0_hb_strobe;
+   di_reply <= mncdi0_reply;
+   di_pgmout <= mncdi0_pgmout;
+   di_event <= mncdi0_event;
+
+   mncdo0: mncdo port map(
+      base_addr => o"771260",
+      ivec => o"340",
+
+      br => mncdo0_br,
+      bg => mncdo0_bg,
+      int_vector => mncdo0_ivec,
+
+      bus_addr_match => mncdo0_addr_match,
+      bus_addr => unibus_addr,
+      bus_dati => mncdo0_dati,
+      bus_dato => unibus_dato,
+      bus_control_dati => unibus_control_dati,
+      bus_control_dato => unibus_control_dato,
+      bus_control_datob => unibus_control_datob,
+
+      d => mncdo0_d,
+      hb_strobe => mncdo0_hb_strobe,
+      lb_strobe => mncdo0_lb_strobe,
+      reply => mncdo0_reply,
+
+      have_mncdo => have_mncdo,
+
+      clk50mhz => clk50mhz,
+      reset => cpu_init,
+      clk => nclk
+   );
+   mncdo0_reply <= do_reply when have_diloopback = 0 else mncdi0_reply;
+   do_dor <= mncdo0_d;
+   do_hb_strobe <= mncdo0_hb_strobe;
+   do_lb_strobe <= mncdo0_lb_strobe;
+
+--
+
    nclk <= not clk;
    ifetch <= ifetchcopy;
 
@@ -1610,6 +2063,12 @@ begin
       else rh0_dati when rh0_addr_match = '1'
       else xu0_dati when xu0_addr_match = '1'
       else dr11c0_dati when dr11c0_addr_match = '1'
+      else mncad0_dati when mncad0_addr_match = '1'
+      else mnckw0_dati when mnckw0_addr_match = '1'
+      else mnckw1_dati when mnckw1_addr_match = '1'
+      else mncaa0_dati when mncaa0_addr_match = '1'
+      else mncdi0_dati when mncdi0_addr_match = '1'
+      else mncdo0_dati when mncdo0_addr_match = '1'
       else "0000000000000000";
 
    unibus_addr_match <= '1'
@@ -1627,6 +2086,12 @@ begin
       or rh0_addr_match = '1'
       or xu0_addr_match = '1'
       or dr11c0_addr_match = '1'
+      or mncad0_addr_match = '1'
+      or mnckw0_addr_match = '1'
+      or mnckw1_addr_match = '1'
+      or mncaa0_addr_match = '1'
+      or mncdi0_addr_match = '1'
+      or mncdo0_addr_match = '1'
 --      or addr_match = '1'
       else '0';
 
@@ -1645,9 +2110,9 @@ begin
    nxmabort <= '1' when cer_nxmabort = '1' or cer_ioabort = '1' else '0';
 
    oddabort <=
-      '1' when bus_control_dato = '1' and bus_control_datob = '0' and bus_addr(0) = '1'
-      else '1' when ifetchcopy = '1' and unibus_control_dati = '1' and unibus_addr(17 downto 13) = "11111" and rom0_addr_match /= '1' and rom1_addr_match /= '1'
-      else '1' when mmu_oddabort = '1'
+      '1' when bus_control_dato = '1' and bus_control_datob = '0' and bus_addr(0) = '1' and have_oddabort = 1
+      else '1' when ifetchcopy = '1' and unibus_control_dati = '1' and unibus_addr(17 downto 13) = "11111" and rom0_addr_match /= '1' and rom1_addr_match /= '1' and have_oddabort = 1
+      else '1' when mmu_oddabort = '1' and have_oddabort = 1
       else '0';
 
    busmaster_nxmabort <=
@@ -1703,9 +2168,6 @@ begin
    cpu_addr_v <= cpu_addr;
 
    cpu_br7 <= '0';
-   cpu_br6 <= kw0_br;
-   kw0_bg <= cpu_bg6;
-   cpu_int_vector6 <= kw0_ivec;
 
 -- npr logic
 
@@ -1715,7 +2177,7 @@ begin
          if reset = '1' then
             cpu_npr <= '0';
 --            cpu_br7 <= '0';
---            cpu_br6 <= '0';
+            cpu_br6 <= '0';
             cpu_br5 <= '0';
             cpu_br4 <= '0';
          else
@@ -1776,6 +2238,39 @@ begin
 
                when others =>
                   npr_state <= npr_idle;
+
+            end case;
+
+            case br6_state is
+               when br6_idle =>
+                  if kw0_br = '1' then
+                     br6_state <= br6_kw0;
+                     cpu_br6 <= kw0_br;
+                  elsif mncad0_br = '1' then
+                     br6_state <= br6_mncad0;
+                     cpu_br6 <= mncad0_br;
+                  else
+                     cpu_br6 <= '0';
+                  end if;
+
+               when br6_kw0 =>
+                  cpu_br6 <= kw0_br;
+                  kw0_bg <= cpu_bg6;
+                  cpu_int_vector6 <= kw0_ivec;
+                  if kw0_br = '0' and kw0_bg = '0' then
+                     br6_state <= br6_idle;
+                  end if;
+
+               when br6_mncad0 =>
+                  cpu_br6 <= mncad0_br;
+                  mncad0_bg <= cpu_bg6;
+                  cpu_int_vector6 <= mncad0_ivec;
+                  if mncad0_br = '0' and mncad0_bg = '0' then
+                     br6_state <= br6_idle;
+                  end if;
+
+               when others =>
+                  br6_state <= br6_idle;
 
             end case;
 
@@ -1861,6 +2356,18 @@ begin
                   elsif kl3_br = '1' then
                      br4_state <= br4_kl3;
                      cpu_br4 <= kl3_br;
+                  elsif mnckw0_br = '1' then
+                     br4_state <= br4_mnckw0;
+                     cpu_br4 <= mnckw0_br;
+                  elsif mnckw1_br = '1' then
+                     br4_state <= br4_mnckw1;
+                     cpu_br4 <= mnckw1_br;
+                  elsif mncdi0_br = '1' then
+                     br4_state <= br4_mncdi0;
+                     cpu_br4 <= mncdi0_br;
+                  elsif mncdo0_br = '1' then
+                     br4_state <= br4_mncdo0;
+                     cpu_br4 <= mncdo0_br;
                   else
                      cpu_br4 <= '0';
                   end if;
@@ -1894,6 +2401,38 @@ begin
                   kl3_bg <= cpu_bg4;
                   cpu_int_vector4 <= kl3_ivec;
                   if kl3_br = '0' and kl3_bg = '0' then
+                     br4_state <= br4_idle;
+                  end if;
+
+               when br4_mnckw0 =>
+                  cpu_br4 <= mnckw0_br;
+                  mnckw0_bg <= cpu_bg4;
+                  cpu_int_vector4 <= mnckw0_ivec;
+                  if mnckw0_br = '0' and mnckw0_bg = '0' then
+                     br4_state <= br4_idle;
+                  end if;
+
+               when br4_mnckw1 =>
+                  cpu_br4 <= mnckw1_br;
+                  mnckw1_bg <= cpu_bg4;
+                  cpu_int_vector4 <= mnckw1_ivec;
+                  if mnckw1_br = '0' and mnckw1_bg = '0' then
+                     br4_state <= br4_idle;
+                  end if;
+
+               when br4_mncdi0 =>
+                  cpu_br4 <= mncdi0_br;
+                  mncdi0_bg <= cpu_bg4;
+                  cpu_int_vector4 <= mncdi0_ivec;
+                  if mncdi0_br = '0' and mncdi0_bg = '0' then
+                     br4_state <= br4_idle;
+                  end if;
+
+               when br4_mncdo0 =>
+                  cpu_br4 <= mncdo0_br;
+                  mncdo0_bg <= cpu_bg4;
+                  cpu_int_vector4 <= mncdo0_ivec;
+                  if mncdo0_br = '0' and mncdo0_bg = '0' then
                      br4_state <= br4_idle;
                   end if;
 

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.17 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -61,7 +61,7 @@ entity rh11 is
 
       have_rh : in integer range 0 to 1 := 0;
       have_rh70 : in integer range 0 to 1 := 0;
-      rmtype : in integer range 4 to 7 := 6;
+      rh_type : in integer range 4 to 7 := 6;
       reset : in std_logic;
       clk50mhz : in std_logic;
       nclk : in std_logic;
@@ -97,6 +97,7 @@ component sdspi is
       sdcard_xfer_write : in std_logic;
       sdcard_xfer_in : in std_logic_vector(15 downto 0);
 
+      enable : in integer range 0 to 1 := 0;
       controller_clk : in std_logic;
       reset : in std_logic;
       clk50mhz : in std_logic
@@ -291,51 +292,36 @@ signal sd_addr : std_logic_vector(22 downto 0);
 type busmaster_state_t is (
    busmaster_idle,
    busmaster_read,
+   busmaster_readh,
+   busmaster_readh2,
    busmaster_read1,
    busmaster_read_done,
    busmaster_write1,
    busmaster_write,
+   busmaster_writen,
    busmaster_write_wait,
    busmaster_write_done,
    busmaster_wait
 );
 signal busmaster_state : busmaster_state_t := busmaster_idle;
 
-attribute keep: boolean;
-attribute preserve: boolean;
-attribute keep of wcp : signal is true;
-attribute preserve of wcp : signal is true;
-attribute keep of work_bar : signal is true;
-attribute preserve of work_bar : signal is true;
-attribute keep of sdcard_read_start : signal is true;
-attribute preserve of sdcard_read_start : signal is true;
-attribute keep of sdcard_read_ack : signal is true;
-attribute preserve of sdcard_read_ack : signal is true;
-attribute keep of sdcard_read_done : signal is true;
-attribute preserve of sdcard_read_done : signal is true;
-attribute keep of sdcard_idle : signal is true;
-attribute preserve of sdcard_idle : signal is true;
-attribute keep of sd_addr : signal is true;
-attribute preserve of sd_addr : signal is true;
-
-
 begin
 
-   with rmtype select noofsec <=
+   with rh_type select noofsec <=
       "00010110" when 4,                         -- 22
       "00100000" when 5,                         -- 32
       "00010110" when 6,                         -- 22
       "00110010" when 7,                         -- 50
       "00000000" when others;
 
-   with rmtype select nooftrk <=
+   with rh_type select nooftrk <=
       "00010011" when 4,                         -- 19
       "00010011" when 5,                         -- 19
       "00010011" when 6,                         -- 19
       "00100000" when 7,                         -- 32
       "00000000" when others;
 
-   with rmtype select noofcyl <=
+   with rh_type select noofcyl <=
       "0000000110011011" when 4,                 -- 411 = 171798
       "0000001100110111" when 5,                 -- 823 = 500384
       "0000001100101111" when 6,                 -- 815 = 340670
@@ -367,6 +353,7 @@ begin
       sdcard_xfer_in => sdcard_xfer_in,
       sdcard_xfer_write => sdcard_xfer_write,
 
+      enable => have_rh,
       controller_clk => clk,
       reset => reset,
       clk50mhz => clk50mhz
@@ -388,6 +375,7 @@ begin
       else '0';
    rmcs1_tre <= '1' when rmcs2_dlt = '1' or rmcs2_wce = '1' or rmcs2_pe = '1' or rmcs2_ned = '1'
       or rmcs2_nem = '1' or rmcs2_mxf = '1' or rmcs2_pge = '1' or rmcs2_mdpe = '1'
+      or rmer1_iae = '1' or rmer2_ivc = '1'
       else '0';
 
    rmcs1_bae <= rmbae(1 downto 0);
@@ -519,7 +507,7 @@ begin
 
 -- rmdt  17 776 726                                             -- drive type
                      when "01011" =>
-                        case rmtype is
+                        case rh_type is
                            when 4 =>
                               bus_dati <= "0" & o"20020";
                            when 5 =>
@@ -650,7 +638,13 @@ begin
                               if bus_dato(3) = '1' then         -- set rmds writelock
                                  rmds_wrl <= '1';
                               end if;
--- FIXME, left off for now - only causes more messages from zrmm                              rmmr1(0) <= bus_dato(0);          -- dmd bit
+                              if bus_dato(0) = '1' then
+                                 rmds_vv <= '0';
+                              end if;
+                              rmmr1(0) <= bus_dato(0);          -- dmd bit
+                              if bus_dato(0) = '0' then
+                                 rmmr1 <= (others => '0');
+                              end if;
 
 -- rmof  17 776 732                                             -- offset
                            when "01101" =>
@@ -818,6 +812,8 @@ begin
                   if (rmds_vv = '0' or rmds_dry = '0')
                   and rmcs1_fnc /= "01000" and rmcs1_fnc /= "01001" then
                      rmer2_ivc <= '1';
+                     rmcs1_go <= '0';
+                     rmds_ataset <= '1';
                   elsif rmcs2_u /= "000" then
                    -- nothing - there is one drive only
                   else
@@ -925,12 +921,14 @@ begin
 
                         when "11000" | "11001" =>             -- write data, write header/data
                            rmcs1_rdy <= '0';
+                           rmds_om <= '0';
                            if sdcard_idle = '1' and write_start = '0' then
                               if v_iae = '1' then
                                  rmer1_iae <= '1';
                                  rmcs1_go <= '0';
                                  rmds_dry <= '1';
                                  rmcs1_rdyset <= '1';
+                                 rmds_ataset <= '1';
                               elsif rmds_wrl = '1' then                  -- if write lock is on
                                  rmer1_wle <= '1';
                                  rmds_ataset <= '1';
@@ -952,10 +950,13 @@ begin
                                     rmda_sa <= (others => '0');
                                     if rmda_ta = nooftrk - 1 then
                                        rmda_ta <= (others => '0');
-                                       if rmdc = noofcyl - 1 then
+                                       if rmdc = noofcyl then
                                           rmer1_aoe <= '1';
                                        else
                                           rmdc <= rmdc + 1;
+                                          if rmdc = noofcyl - 1 then
+                                             rmds_lst <= '1';
+                                          end if;
                                        end if;
                                     else
                                        rmda_ta <= rmda_ta + 1;
@@ -1000,6 +1001,7 @@ begin
                                  rmcs1_go <= '0';
                                  rmds_dry <= '1';
                                  rmcs1_rdyset <= '1';
+                                 rmds_ataset <= '1';
                               else
                                  sdcard_read_start <= '1';
                                  if rmcs1_fnc(0) = '1' and unsigned(wcp) >= unsigned'("0000000000000010") then
@@ -1015,10 +1017,13 @@ begin
                                     rmda_sa <= (others => '0');
                                     if rmda_ta = nooftrk - 1 then
                                        rmda_ta <= (others => '0');
-                                       if rmdc = noofcyl - 1 then
+                                       if rmdc = noofcyl then
                                           rmer1_aoe <= '1';
                                        else
                                           rmdc <= rmdc + 1;
+                                          if rmdc = noofcyl - 1 then
+                                             rmds_lst <= '1';
+                                          end if;
                                        end if;
                                     else
                                        rmda_ta <= rmda_ta + 1;
@@ -1187,43 +1192,43 @@ begin
       ("0000" & rmdc(9 downto 0) & "000000000")
       + ("0000000" & rmdc(9 downto 0) & "000000")
       + ("00000000" & rmdc(9 downto 0) & "00000")
-   when rmtype = 5  -- rmdc * 608
+   when rh_type = 5  -- rmdc * 608
    else
       ("00000" & rmdc(9 downto 0) & "00000000")
       + ("000000" & rmdc(9 downto 0) & "0000000")
       + ("00000000" & rmdc(9 downto 0) & "00000")
       + ("000000000000" & rmdc(9 downto 0) & "0")
-   when rmtype = 4
+   when rh_type = 4
    else
       ("00000" & rmdc(9 downto 0) & "00000000")
       + ("000000" & rmdc(9 downto 0) & "0000000")
       + ("00000000" & rmdc(9 downto 0) & "00000")
       + ("000000000000" & rmdc(9 downto 0) & "0")
-   when rmtype = 6
+   when rh_type = 6
    else "00000000000000000000000";
 
    sd_addr <=
       unsigned(ca_offset)
       + unsigned("0000000000000" & rmda_ta(4 downto 0) & "00000")
       + unsigned("000000000000000000" & rmda_sa(4 downto 0))
-   when rmtype = 5
+   when rh_type = 5
    else
       unsigned(ca_offset)
       + unsigned("00000000000000" & rmda_ta(4 downto 0) & "0000")
       + unsigned("0000000000000000" & rmda_ta(4 downto 0) & "00")
       + unsigned("00000000000000000" & rmda_ta(4 downto 0) & "0")
       + unsigned("000000000000000000" & rmda_sa(4 downto 0))
-   when rmtype = 4
+   when rh_type = 4
    else
       unsigned(ca_offset)
       + unsigned("00000000000000" & rmda_ta(4 downto 0) & "0000")
       + unsigned("0000000000000000" & rmda_ta(4 downto 0) & "00")
       + unsigned("00000000000000000" & rmda_ta(4 downto 0) & "0")
       + unsigned("000000000000000000" & rmda_sa(4 downto 0))
-   when rmtype = 6
+   when rh_type = 6
    else "00000000000000000000000";
 
--- handle sd card interface
+-- busmaster
 
    process(clk, reset)
    begin
@@ -1236,176 +1241,235 @@ begin
             nxm <= '0';
          else
 
-            case busmaster_state is
+            if have_rh = 1 then
 
-               when busmaster_idle =>
-                  nxm <= '0';
-                  if write_start = '1' then
-                     npr <= '1';
-                     if npg = '1' then
-                        busmaster_state <= busmaster_write1;
-                        if rmcs1_fnc = "11001" then                        -- write header/data
-                           work_bar <= (rmbae & rmba(15 downto 1)) + 2;
-                        else
+               case busmaster_state is
+
+                  when busmaster_idle =>
+                     nxm <= '0';
+                     if write_start = '1' then
+                        npr <= '1';
+                        if npg = '1' then
+                           busmaster_state <= busmaster_write1;
+                           if rmcs1_fnc = "11001" then                        -- write header/data
+                              work_bar <= (rmbae & rmba(15 downto 1)) + 2;
+                           else
+                              work_bar <= rmbae & rmba(15 downto 1);
+                           end if;
+                           if unsigned(wcp) >= unsigned'("0000000100000000") then
+                              sectorcounter <= "100000000";
+                           elsif wcp = "0000000000000000" then
+                              sectorcounter <= "000000000";
+                           else
+                              sectorcounter <= '0' & wcp(7 downto 0);
+                           end if;
+
+                           sdcard_xfer_addr <= 0;
+                        end if;
+                     elsif sdcard_read_done = '1' then
+                        npr <= '1';
+                        if npg = '1' then
                            work_bar <= rmbae & rmba(15 downto 1);
-                        end if;
-                        if unsigned(wcp) >= unsigned'("0000000100000000") then
-                           sectorcounter <= "011111111";           -- 255
-                        else
-                           sectorcounter <= '0' & (unsigned(wcp(7 downto 0)) - unsigned'("00000001"));
-                        end if;
+                           if rmcs1_fnc(0) = '1' then                        -- read header/data, write check header/data
+                              busmaster_state <= busmaster_readh;
+                           else
+                              busmaster_state <= busmaster_read1;
+                           end if;
+                           if unsigned(wcp) >= unsigned'("0000000100000000") then
+                              sectorcounter <= "100000000";
+                           else
+                              sectorcounter <= '0' & wcp(7 downto 0);
+                           end if;
 
-                        sdcard_xfer_addr <= 0;
+                           sdcard_xfer_addr <= 0;
+                           sdcard_xfer_read <= '1';
+                        end if;
                      end if;
-                  elsif sdcard_read_done = '1' then
-                     npr <= '1';
-                     if npg = '1' then
-                        busmaster_state <= busmaster_read1;
-                        if rmcs1_fnc(0) = '1' then                        -- read header/data, write check header/data
-                           work_bar <= (rmbae & rmba(15 downto 1)) + 2;
-                        else
-                           work_bar <= rmbae & rmba(15 downto 1);
-                        end if;
-                        work_bar <= rmbae & rmba(15 downto 1);
-                        if unsigned(wcp) >= unsigned'("0000000100000000") then
-                           sectorcounter <= "011111111";           -- 255
-                        else
-                           sectorcounter <= '0' & (unsigned(wcp(7 downto 0)) - unsigned'("00000001"));
-                        end if;
-
-                        sdcard_xfer_addr <= 0;
-                        sdcard_xfer_read <= '1';
-                     end if;
-                  end if;
 
 
-               when busmaster_read1 =>
-                  busmaster_state <= busmaster_read;
-                  if have_rh70 = 1 then
-                     rh70_bus_master_addr <= work_bar & '0';
-                     rh70_bus_master_dato <= sdcard_xfer_out;
-                  else
-                     bus_master_addr <= work_bar(17 downto 1) & '0';
-                     bus_master_dato <= sdcard_xfer_out;
-                  end if;
-                  sdcard_xfer_addr <= sdcard_xfer_addr + 1;
-
-
-               when busmaster_read =>
-                  if sectorcounter /= "000000000" then
-                     work_bar <= work_bar + 1;
-                     sdcard_xfer_addr <= sdcard_xfer_addr + 1;
-                     sectorcounter <= sectorcounter - 1;
-                  else
-                     busmaster_state <= busmaster_read_done;
-                     work_bar <= work_bar + 1;
-                  end if;
-
-                  if have_rh70 = 1 then
-                     rh70_bus_master_control_dati <= '0';
-                     rh70_bus_master_control_dato <= '1';
-                     rh70_bus_master_addr <= work_bar & '0';
-                     rh70_bus_master_dato <= sdcard_xfer_out;
-                  else
-                     bus_master_control_dati <= '0';
-                     bus_master_control_dato <= '1';
-                     bus_master_addr <= work_bar(17 downto 1) & '0';
-                     bus_master_dato <= sdcard_xfer_out;
-                  end if;
-
-                  if bus_master_nxm = '1' and have_rh70 = 0 then
-                     nxm <= '1';
-                     busmaster_state <= busmaster_read_done;
-                  end if;
-                  if rh70_bus_master_nxm = '1' and have_rh70 = 1 then
-                     nxm <= '1';
-                     busmaster_state <= busmaster_read_done;
-                  end if;
-
-
-               when busmaster_read_done =>
-                  npr <= '0';
-                  sdcard_xfer_read <= '0';
-                  sdcard_read_ack <= '1';
-                  if have_rh70 = 1 then
-                     rh70_bus_master_control_dati <= '0';
-                     rh70_bus_master_control_dato <= '0';
-                  else
-                     bus_master_control_dati <= '0';
-                     bus_master_control_dato <= '0';
-                  end if;
-                  if sdcard_read_ack = '1' and sdcard_read_done = '0' then
-                     busmaster_state <= busmaster_idle;
-                     sdcard_read_ack <= '0';
-                  end if;
-
-
-               when busmaster_write1 =>
-                  busmaster_state <= busmaster_write;
-                  sdcard_xfer_write <= '0';
-                  sdcard_xfer_addr <= 0;
-                  if have_rh70 = 1 then
-                     rh70_bus_master_addr <= work_bar & '0';
-                     rh70_bus_master_control_dati <= '1';
-                  else
-                     bus_master_addr <= work_bar(17 downto 1) & '0';
-                     bus_master_control_dati <= '1';
-                  end if;
-                  work_bar <= work_bar + 1;
-
-
-               when busmaster_write =>
-                  if sdcard_xfer_write = '1' then
-                     sectorcounter <= sectorcounter - 1;
-                     sdcard_xfer_addr <= sdcard_xfer_addr + 1;
-                  end if;
-                  if sectorcounter /= "000000000" then
-                     if sectorcounter /= "000000001" then
-                        work_bar <= work_bar + 1;
-                     end if;
+                  when busmaster_readh =>
                      if have_rh70 = 1 then
                         rh70_bus_master_addr <= work_bar & '0';
-                        rh70_bus_master_control_dati <= '1';
-                        sdcard_xfer_in <= rh70_bus_master_dati;
-                        sdcard_xfer_write <= '1';
+                        rh70_bus_master_dato <= "110" & rmof_fmt & rmdc(11 downto 0);
+                        rh70_bus_master_control_dato <= '1';
                      else
                         bus_master_addr <= work_bar(17 downto 1) & '0';
-                        bus_master_control_dati <= '1';
-                        sdcard_xfer_in <= bus_master_dati;
-                        sdcard_xfer_write <= '1';
+                        bus_master_dato <= rmdc;
+                        bus_master_control_dato <= '1';
                      end if;
-                  else
-                     busmaster_state <= busmaster_write_wait;
---                     sdcard_xfer_in <= bus_master_dati;
-                     sdcard_xfer_write <= '0';
+                     work_bar <= work_bar + 1;
+                     busmaster_state <= busmaster_readh2;
+
+
+                  when busmaster_readh2 =>
+                     if have_rh70 = 1 then
+                        rh70_bus_master_addr <= work_bar & '0';
+                        rh70_bus_master_dato <= rmda_ta & rmda_sa;
+                        rh70_bus_master_control_dato <= '1';
+                     else
+                        bus_master_addr <= work_bar(17 downto 1) & '0';
+                        bus_master_dato <= rmda_ta & rmda_sa;
+                        bus_master_control_dato <= '1';
+                     end if;
+                     work_bar <= work_bar + 1;
+                     busmaster_state <= busmaster_read1;
+
+
+                  when busmaster_read1 =>
+                     busmaster_state <= busmaster_read;
+                     if have_rh70 = 1 then
+                        rh70_bus_master_addr <= work_bar & '0';
+                        rh70_bus_master_dato <= sdcard_xfer_out;
+                        rh70_bus_master_control_dato <= '0';
+                     else
+                        bus_master_addr <= work_bar(17 downto 1) & '0';
+                        bus_master_dato <= sdcard_xfer_out;
+                        bus_master_control_dato <= '0';
+                     end if;
+                     sdcard_xfer_addr <= sdcard_xfer_addr + 1;
+
+
+                  when busmaster_read =>
+                     if sectorcounter /= "000000000" then
+                        work_bar <= work_bar + 1;
+                        sdcard_xfer_addr <= sdcard_xfer_addr + 1;
+                        sectorcounter <= sectorcounter - 1;
+
+                        if have_rh70 = 1 then
+                           rh70_bus_master_control_dati <= '0';
+                           rh70_bus_master_control_dato <= '1';
+                           rh70_bus_master_addr <= work_bar & '0';
+                           rh70_bus_master_dato <= sdcard_xfer_out;
+                        else
+                           bus_master_control_dati <= '0';
+                           bus_master_control_dato <= '1';
+                           bus_master_addr <= work_bar(17 downto 1) & '0';
+                           bus_master_dato <= sdcard_xfer_out;
+                        end if;
+                     else
+                        busmaster_state <= busmaster_read_done;
+                        if have_rh70 = 1 then
+                           rh70_bus_master_control_dati <= '0';
+                           rh70_bus_master_control_dato <= '0';
+                        else
+                           bus_master_control_dati <= '0';
+                           bus_master_control_dato <= '0';
+                        end if;
+                     end if;
+
+                     if bus_master_nxm = '1' and have_rh70 = 0 then
+                        nxm <= '1';
+                        busmaster_state <= busmaster_read_done;
+                     end if;
+                     if rh70_bus_master_nxm = '1' and have_rh70 = 1 then
+                        nxm <= '1';
+                        busmaster_state <= busmaster_read_done;
+                     end if;
+
+
+                  when busmaster_read_done =>
+                     npr <= '0';
+                     sdcard_xfer_read <= '0';
+                     sdcard_read_ack <= '1';
                      if have_rh70 = 1 then
                         rh70_bus_master_control_dati <= '0';
+                        rh70_bus_master_control_dato <= '0';
                      else
                         bus_master_control_dati <= '0';
+                        bus_master_control_dato <= '0';
                      end if;
-                  end if;
+                     if sdcard_read_ack = '1' and sdcard_read_done = '0' then
+                        busmaster_state <= busmaster_idle;
+                        sdcard_read_ack <= '0';
+                     end if;
 
 
-               when busmaster_write_wait =>
-                  npr <= '0';
-                  sdcard_write_start <= '1';
-                  sdcard_xfer_write <= '0';
-                  if sdcard_write_done = '1' then
-                     busmaster_state <= busmaster_write_done;
-                     sdcard_write_start <= '0';
-                  end if;
+                  when busmaster_write1 =>
+                     sdcard_xfer_write <= '0';
+                     sdcard_xfer_addr <= 255;
+                     if sectorcounter /= "000000000" then
+                        if have_rh70 = 1 then
+                           rh70_bus_master_addr <= work_bar & '0';
+                           rh70_bus_master_control_dati <= '1';
+                        else
+                           bus_master_addr <= work_bar(17 downto 1) & '0';
+                           bus_master_control_dati <= '1';
+                        end if;
+                        work_bar <= work_bar + 1;
+                        busmaster_state <= busmaster_write;
+                     else
+                        busmaster_state <= busmaster_writen;
+                     end if;
 
 
-               when busmaster_write_done =>
-                  sdcard_write_ack <= '1';
-                  if sdcard_write_ack = '1' and sdcard_write_done = '0' then
-                     busmaster_state <= busmaster_idle;
-                     sdcard_write_ack <= '0';
-                  end if;
+                  when busmaster_write =>
+                     sectorcounter <= sectorcounter - 1;
+                     if sectorcounter /= "000000000" then
+                        if have_rh70 = 1 then
+                           sdcard_xfer_in <= rh70_bus_master_dati;
+                        else
+                           sdcard_xfer_in <= bus_master_dati;
+                        end if;
+                        sdcard_xfer_write <= '1';
+                        sdcard_xfer_addr <= sdcard_xfer_addr + 1;
 
-               when others =>
+                        if sectorcounter /= "000000001" then
+                           work_bar <= work_bar + 1;
+                           if have_rh70 = 1 then
+                              rh70_bus_master_addr <= work_bar & '0';
+                              rh70_bus_master_control_dati <= '1';
+                           else
+                              bus_master_addr <= work_bar(17 downto 1) & '0';
+                              bus_master_control_dati <= '1';
+                           end if;
+                        end if;
+                     else
+                        if sdcard_xfer_addr = 255 then
+                           busmaster_state <= busmaster_write_wait;
+                        else
+                           busmaster_state <= busmaster_writen;
+                        end if;
+                        npr <= '0';
+                        if have_rh70 = 1 then
+                           rh70_bus_master_control_dati <= '0';
+                        else
+                           bus_master_control_dati <= '0';
+                        end if;
+                     end if;
 
-            end case;
+
+                  when busmaster_writen =>
+                     npr <= '0';
+                     if sdcard_xfer_addr = 255 then
+                        busmaster_state <= busmaster_write_wait;
+                     else
+                        sdcard_xfer_in <= (others => '0');
+                        sdcard_xfer_addr <= sdcard_xfer_addr + 1;
+                        sdcard_xfer_write <= '1';
+                     end if;
+
+
+                  when busmaster_write_wait =>
+                     sdcard_write_start <= '1';
+                     sdcard_xfer_write <= '0';
+                     if sdcard_write_done = '1' then
+                        busmaster_state <= busmaster_write_done;
+                        sdcard_write_start <= '0';
+                     end if;
+
+
+                  when busmaster_write_done =>
+                     sdcard_write_ack <= '1';
+                     if sdcard_write_ack = '1' and sdcard_write_done = '0' then
+                        busmaster_state <= busmaster_idle;
+                        sdcard_write_ack <= '0';
+                     end if;
+
+                  when others =>
+
+               end case;
+
+            end if;
 
          end if;
       end if;

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.98 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -42,6 +42,11 @@ entity mmu is
       dstfreference : in std_logic;
       sr3csmenable : out std_logic;
       ifetch : in std_logic;
+
+      -- lma (f11)
+      mmu_lma_c1 : out std_logic;
+      mmu_lma_c0 : out std_logic;
+      mmu_lma_eub : out std_logic_vector(21 downto 0);
 
       bus_unibus_mapped : out std_logic;
 
@@ -79,6 +84,7 @@ entity mmu is
 
       modelcode : in integer range 0 to 255;
       sr0out_debug : out std_logic_vector(15 downto 0);
+      have_odd_abort : out integer range 0 to 255;
 
       psw : in std_logic_vector(15 downto 0);
       id : in std_logic;
@@ -109,8 +115,6 @@ signal parout : std_logic_vector(15 downto 0);
 signal pdrout : std_logic_vector(15 downto 0);
 
 signal addr_p : std_logic_vector(21 downto 0);
-attribute keep: boolean;
-attribute keep of addr_p: signal is true;
 
 signal addr_p18 : std_logic_vector(17 downto 6);
 signal addr_p22 : std_logic_vector(21 downto 6);
@@ -522,126 +526,133 @@ signal have_sup : integer range 0 to 1;
 signal have_sr3 : integer range 0 to 1;
 
 signal have_csm : integer range 0 to 1;
+signal have_oddabort : integer range 0 to 1;
 
 
 begin
 
 -- cpu model configuration
 
-   with modelcode select have_mmu22 <=
-      1 when 23 | 24,                  -- kdf11
+   with modelcode select have_mmu22 <= -- does the mmu have 22 bit mode
+      1 when 23 | 24,                        -- kdf11
       1 when 44,
       1 when 70,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
 
-   with modelcode select have_1920 <=
---      1 when 23 | 24,                  -- kdf11
+   with modelcode select have_1920 <=  -- for 22-bit, does memory end at 1920KWords
+      1 when 24,                             -- kdf11 but not 11/23, I'd speculate
       1 when 44,
       1 when 70,
       0 when others;
 
-   with modelcode select have_mmumm <=
-      1 when 34 | 35 | 40,             -- kt11d!
+   with modelcode select have_mmumm <= -- does the mmu have the maintenance mode bit in sr0
+      1 when 34 | 35 | 40,                   -- kt11d!
       1 when 44,
-      1 when 45 | 50 | 55,             -- kt11c
+      1 when 45 | 50 | 55,                   -- kt11c
       1 when 60,
       1 when 70,
       0 when others;
 
-   with modelcode select have_mmutr <=
-      1 when 45 | 50 | 55,             -- kt11c
+   with modelcode select have_mmutr <= -- does the mmu implement trap on access
+      1 when 45 | 50 | 55,                   -- kt11c
       1 when 70,
       0 when others;
 
-   with modelcode select have_mmu <=
-      1 when 23 | 24,                  -- kdf11
-      1 when 34 | 35 | 40,             -- kt11d!
+   with modelcode select have_mmu <=   -- master switch - is there an mmu at all
+      1 when 23 | 24,                        -- kdf11
+      1 when 34 | 35 | 40,                   -- kt11d!
       1 when 44,
       1 when 45 | 50 | 55,
       1 when 60,
       1 when 70,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
 
-   with modelcode select have_ubm <=
+   with modelcode select have_ubm <=   -- does the system have the unibus map
       1 when 24,
       1 when 44,
       1 when 70,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11 FIXME, this incorrectly causes the non-unibus systems to include the map - probably incorrect. What is required is probably only to mechanize the mmr3 bit, because at least zkdj tests it.
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11 FIXME, this incorrectly causes the non-unibus systems to include the map - probably incorrect. What is required is probably only to mechanize the mmr3 bit, because at least zkdj tests it.
 --      1 when 84 | 94,
       0 when others;
 
-   with modelcode select have_pdr15 <=
+   with modelcode select have_pdr15 <= -- is there a bit 15, bypass cache, in the pdr
       1 when 44,
-      0 when 70,                       -- acc. handbook
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      0 when 70,                             -- acc. handbook
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
 
-   with modelcode select have_pdra <=
-      1 when 45 | 50 | 55,             -- kt11c
+   with modelcode select have_pdra <=  -- is there an a bit in the pdr
+      1 when 45 | 50 | 55,                   -- kt11c
       1 when 70,
       0 when others;
 
-   with modelcode select have_pdrw <=
-      1 when 23 | 24,                  -- kdf11
-      1 when 34 | 35 | 40,             -- kt11d!
+   with modelcode select have_pdrw <=  -- is there a w bit in the pdr
+      1 when 23 | 24,                        -- kdf11
+      1 when 34 | 35 | 40,                   -- kt11d!
       1 when 44,
-      1 when 45 | 50 | 55,             -- kt11c
+      1 when 45 | 50 | 55,                   -- kt11c
       1 when 60,
       1 when 70,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
 
-   with modelcode select have_acf2 <=
-      1 when 23 | 24,                  -- kdf11
-      1 when 34 | 35 | 40,             -- kt11d!
+   with modelcode select have_acf2 <=  -- is the acf of the 2-bit model
+      1 when 23 | 24,                        -- kdf11
+      1 when 34 | 35 | 40,                   -- kt11d!
       1 when 44,
       1 when 60,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
 
-   with modelcode select have_acf3 <=
+   with modelcode select have_acf3 <=  -- is the acf of the 3-bit model
       1 when 45 | 50 | 55,
       1 when 70,
       0 when others;
 
-   with modelcode select have_sr0ic <=
-      1 when 45 | 50 | 55,             -- kt11c
+   with modelcode select have_sr0ic <= -- is the sr0 instruction complete bit working
+      1 when 45 | 50 | 55,                   -- kt11c
       1 when 70,
       0 when others;
 
-   with modelcode select have_sr1zero <=
-      1 when 23 | 24,                  -- kdf11
-      1 when 34 | 35 | 40,             -- kt11d!
+   with modelcode select have_sr1zero <=  -- is the sr1 always zero
+      1 when 23 | 24,                        -- kdf11
+      1 when 34 | 35 | 40,                   -- kt11d!
       1 when 60,
       0 when others;
 
-   with modelcode select have_id <=
+   with modelcode select have_id <=    -- does the mmu do separate i and d
       1 when 44,
-      1 when 45 | 50 | 55,             -- kt11c
+      1 when 45 | 50 | 55,                   -- kt11c
       1 when 70,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
 
-   with modelcode select have_sup <=
+   with modelcode select have_sup <=   -- does the mmu do supervisor state
       1 when 44,
-      1 when 45 | 50 | 55,             -- kt11c
+      1 when 45 | 50 | 55,                   -- kt11c
       1 when 70,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
 
-   with modelcode select have_sr3 <=
+   with modelcode select have_sr3 <=   -- is the sr3 register present
+      1 when 23 | 24,                        -- kdf11
       1 when 44,
-      1 when 45 | 50 | 55,             -- kt11c
+      1 when 45 | 50 | 55,                   -- kt11c
       1 when 70,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
 
-   with modelcode select have_csm <=
+   with modelcode select have_csm <=   -- is the csm instruction present and does the mmu have the bit for it in sr3
       1 when 44,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      1 when 73 | 83 | 84 | 93 | 94,         -- kdj11
       0 when others;
+
+   with modelcode select have_oddabort <= -- does the system detect odd address errors
+      0 when 23 | 24,                        -- kdf11
+      1 when others;
+   have_odd_abort <= have_oddabort;                                  -- the unibus component needs this too
 
 
 -- console lights - mapping mode
@@ -814,7 +825,7 @@ begin
       else mmu_datain;
 
    oddaddress <=
-      '1' when cpu_dw8 = '0' and cpu_addr_v(0) = '1'
+      '1' when cpu_dw8 = '0' and cpu_addr_v(0) = '1' and have_oddabort = 1
       else '0';
    oddabort <=                                           -- FIXME, this aborts on read with dw8=0, but would a real pdp11 detect this error? Yes- at least, kkab fails if it's disabled.
       '1' when (cpu_rd = '1' or cpu_wr = '1') and oddaddress = '1'
@@ -904,6 +915,11 @@ sr0out_debug <= sr0;
             sr1 <= sr1_in;
             sr2 <= sr2_in;
             sr3 <= "000000";
+            if modelcode = 23 or modelcode = 24 then
+               mmu_lma_eub <= (others => '0');
+               mmu_lma_c0 <= '0';
+               mmu_lma_c1 <= '0';
+            end if;
          else
 
             -- process updates to sr0, sr1, sr2, handle abort acknowledgement
@@ -972,6 +988,24 @@ sr0out_debug <= sr0;
                   when others =>
                      null;
                end case;
+            end if;
+
+-- f11
+
+            if modelcode = 23 or modelcode = 24 then
+               if sr3(4) = '1' and sr0(0) = '1' and addr_p(21 downto 18) = "1111" and have_ubm = 1 and (cpu_rd = '1' or cpu_wr = '1') then
+                  mmu_lma_eub <= ubmmaddr;
+                  if cpu_dw8 = '1' then
+                     mmu_lma_c0 <= '1';
+                  else
+                     mmu_lma_c0 <= '0';
+                  end if;
+                  if cpu_wr = '1' then
+                     mmu_lma_c1 <= '1';
+                  else
+                     mmu_lma_c1 <= '0';
+                  end if;
+               end if;
             end if;
 
 -- read and write into local registers for mmu

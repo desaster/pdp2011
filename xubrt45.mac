@@ -1,7 +1,7 @@
          .title test45 - xu proof of concept code
 
 ;--
-;-- Copyright (c) 2008-2019 Sytse van Slooten
+;-- Copyright (c) 2008-2020 Sytse van Slooten
 ;--
 ;-- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 ;-- other language source files and associated documentation files ("the materials") to use
@@ -69,12 +69,12 @@ pc       = %7
 ;
 ; macros
 ;
-         .macro xubl f,fl,t,tl
+         .macro xubl f,fl,t,tl                   ; xubl : busmaster device to dma bits from the xu cpu memory to the spi
          jsr    pc,xubl
-         .word  f
-         .word  fl
-         .word  t
-         .word  tl
+         .word  f                                ; f  : from address - write to spi
+         .word  fl                               ; fl : from length in bits, multiple of 8 (lower three bits are ignored)
+         .word  t                                ; t  : to address - read from spi
+         .word  tl                               ; tl : to length in bits, multiple of 8 (lower three bits are ignored)
          .endm
 ;
          .macro xubm u,u18,x,l
@@ -128,10 +128,10 @@ t45:
 ;
 ; init ourselves
 ;
-         jsr    pc,init
-         jsr    pc,waitabit
+         jsr    pc,init                ; setup variable values
+         jsr    pc,waitabit            ; delay loop
          xascil <Hello, world: xu-cpu [t45] deuna microcode>
-         jsr    pc,initenc
+         jsr    pc,initenc             ; contact the encx24j600 and reset it
 ;
          clr    @#177776               ; clear psw - this enables the watchdog interrupts
 ;
@@ -157,7 +157,8 @@ t45:
          br     10$                    ; see if there is another frame - FIXME, check if there is an owned buffer first?
 20$:
 ;
-; check if the chip is ok
+; check if the chip is ok - reading the eidled register; this serves no particular purpose other than checking if we're still talking to the chip
+; if comms was lost - including removing the chip and reconnecting it - reset it and set it up so it will work again.
 ;
          clr    deidled
          xubl   reidled,20,deidled,20
@@ -883,12 +884,12 @@ xmitxx:
 ;
          xubl   tecon1,40
 20$:
-         xubl   recon1,20,decon1,20
+         xubl   recon1,20,decon1,20              ; set econ1 bit 1, this causes the chip to transmit.
 ;         xasciz <econ1      : >
 ;         xbhx   decon1,2
 ;         xascnl
 
-         bitb   #2,decon1
+         bitb   #2,decon1                        ; check if econ1 bit 1 is cleared; this means the chip is done transmitting.
          bne    20$
          rts    pc
          .even
@@ -942,13 +943,16 @@ xmitld:
 ;         xwhx   workw,2
 ;         xascil
 
+;
+; setup xubm for transfer from main system core to our buffer - length limited by logic above to 16 bytes
+;
          mov    r1,@#177100
          mov    r2,@#177102
          mov    #buf+2,@#177104
          movb   #0,@#177107
          movb   r4,@#177106
 
-         tst    xmitlen
+         tst    xmitlen                          ; check if this is the first part of the frame? then we need to set the mac address into the buffer
          bne    26$
 ;
 ; set mch bit for transmit ring entry
@@ -1159,7 +1163,7 @@ decpc:   .byte b0sel,setpktdec
 ; getfr: move a frame from the chip onto the receive ring buffer
 ;
 getfr:
-         tst    running
+         tst    running               ;; FIXME does this make sense? after all we;re coming here through pktin.
          bne    1$
          jmp    99$
 1$:
@@ -1309,7 +1313,7 @@ getfr:
 99$:
          rts    pc
 ;
-; init encx24j600 chip connected to spi xubl peripheral on our bus
+; init encx24j600 chip connected to spi xubl peripheral on our bus - see reset procedure in encx24j600 manual, ch. 8.1
 ;
 initenc:
 ;
@@ -1323,9 +1327,9 @@ initenc:
 ; read estat, bit 12 - wait until that shows the chip finished powerup
 ;
 10$:
-         mov    #10.,r0
+         mov    #10.,r0                          ; try the estat check 10 times
 11$:
-         xubl   restat,20,destat,20
+         xubl   restat,20,destat,20              ; checking if estat clkrdy (12) bit is set; this shows the chip is ready and all registers are available
          bit    #10000,destat
          bne    20$
          xasciz <estat      : >
@@ -1390,7 +1394,7 @@ initenc:
          mov    #57776,werxtail+2
          xubl   werxtail,40
 ;
-; read econ1, set rxen
+; read econ1, set rxen - enable the chip to receive frames
 ;
          xubl   recon1,20,decon1,20
          xasciz <econ1      : >
@@ -1418,7 +1422,7 @@ initenc:
          mov    #1,r0
          rts    pc
 ;
-; write, read, verify eudast
+; write, read, verify eudast; to check if we are able to communicate to the encx24j600.
 ;
 chkeudast:
 10$:
@@ -1955,7 +1959,7 @@ bhx:
          mov (sp)+,r1
          rts pc
 ;
-; init - clear essential bits
+; init - clear variables and status registers to their initial values
 ;
 init:
          clr    running

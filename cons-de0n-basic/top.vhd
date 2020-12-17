@@ -1,6 +1,6 @@
-  
+ 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.29 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -62,7 +62,19 @@ entity top is
       dram_we_n : out std_logic;
       dram_cs_n : out std_logic;
 
+      -- pmodda2
+      da_dina0 : out std_logic;
+      da_dinb0 : out std_logic;
+      da_sclk0 : out std_logic;
+      da_sync0 : out std_logic;
+
       -- board peripherals
+      adc_cs_n : out std_logic;
+      adc_saddr : out std_logic;
+      adc_sdat : in std_logic;
+      adc_sclk : out std_logic;
+
+      sw : in std_logic_vector(3 downto 0);
       greenled : out std_logic_vector(7 downto 0);
       key0 : in std_logic;
       key1 : in std_logic;
@@ -90,7 +102,6 @@ component unibus is
 
 -- rl controller
       have_rl : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rl_debug : in integer range 0 to 1 := 1;                  -- enable debug core
       rl_sdcard_cs : out std_logic;
       rl_sdcard_mosi : out std_logic;
       rl_sdcard_sclk : out std_logic;
@@ -99,9 +110,7 @@ component unibus is
 
 -- rk controller
       have_rk : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rk_debug : in integer range 0 to 2 := 1;                  -- enable debug core; 0=none; 1=all; 2=debug blinkenlights only
       have_rk_num : in integer range 1 to 8 := 8;                    -- active number of drives on the controller; set to < 8 to save core
-      have_rk_minimal : in integer range 0 to 1 := 0;                -- 1 for smaller core, but not very compatible controller. Useful to fit s3b200 only
       rk_sdcard_cs : out std_logic;
       rk_sdcard_mosi : out std_logic;
       rk_sdcard_sclk : out std_logic;
@@ -110,12 +119,12 @@ component unibus is
 
 -- rh controller
       have_rh : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rh_debug : in integer range 0 to 1 := 1;                  -- enable debug core
       rh_sdcard_cs : out std_logic;
       rh_sdcard_mosi : out std_logic;
       rh_sdcard_sclk : out std_logic;
       rh_sdcard_miso : in std_logic := '0';
       rh_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
+      rh_type : in integer range 4 to 7 := 6;
 
 -- xu enc424j600 controller interface
       have_xu : in integer range 0 to 1 := 0;                        -- enable conditional compilation
@@ -178,6 +187,38 @@ component unibus is
       dr11c_ndrhi : out std_logic;                                   -- new data ready : dr11c_out(15 downto 8) has new data
       dr11c_dxm : out std_logic;                                     -- data transmitted : dr11c_in data has been read by the cpu
       dr11c_init : out std_logic;                                    -- unibus reset propagated out to the user device
+
+-- minc-11
+
+      have_mncad : in integer range 0 to 1 := 0;                     -- mncad: a/d, max one card in a system
+      have_mnckw : in integer range 0 to 2 := 0;                     -- mnckw: clock, either one or two
+      have_mncaa : in integer range 0 to 1 := 0;                     -- mncaa: d/a
+      have_mncdi : in integer range 0 to 1 := 0;                     -- mncdo: digital in
+      have_mncdo : in integer range 0 to 1 := 0;                     -- mncdo: digital out
+      ad_start : out std_logic;                                      -- interface from mncad to a/d hardware : '1' signals to start converting
+      ad_done : in std_logic := '1';                                 -- interface from mncad to a/d hardware : '1' signals to the mncad that the a/d has completed a conversion
+      ad_channel : out std_logic_vector(5 downto 0);                 -- interface from mncad to a/d hardware : the channel number for the current command
+      ad_nxc : in std_logic := '1';                                  -- interface from mncad to a/d hardware : '1' signals to the mncad that the required channel does not exist
+      ad_sample : in std_logic_vector(11 downto 0) := "000000000000";-- interface from mncad to a/d hardware : the value of the last sample
+      kw_st1in : in std_logic := '0';                                -- mnckw0 st1 signal input, active on rising edge
+      kw_st2in : in std_logic := '0';                                -- mnckw0 st2 signal input, active on rising edge
+      kw_st1out : out std_logic;                                     -- mnckw0 st1 output pulse (actually : copy of the st1flag in the csr
+      kw_st2out : out std_logic;                                     -- mnckw0 st2 output pulse
+      kw_clkov : out std_logic;                                      -- mnckw0 clkovf output pulse
+      da_dac1 : out std_logic_vector(11 downto 0);
+      da_dac2 : out std_logic_vector(11 downto 0);
+      da_dac3 : out std_logic_vector(11 downto 0);
+      da_dac4 : out std_logic_vector(11 downto 0);
+      have_diloopback : in integer range 0 to 1 := 0;                -- set to 1 to loop back mncdo0 to mncdi0 internally for testing
+      di_dir : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi0 data input register
+      di_strobe : in std_logic := '0';
+      di_reply : out std_logic;
+      di_pgmout : out std_logic;
+      di_event : out std_logic;
+      do_dor : out std_logic_vector(15 downto 0);
+      do_hb_strobe : out std_logic;
+      do_lb_strobe : out std_logic;
+      do_reply : in std_logic := '0';
 
 -- cpu console, switches and display register
       have_csdr : in integer range 0 to 1 := 1;
@@ -273,12 +314,49 @@ component paneldriver is
       cons_map18 : in std_logic;
       cons_map22 : in std_logic;
 
-      sample_cycles : in std_logic_vector(15 downto 0) := x"0400";
-      minon_cycles : in std_logic_vector(15 downto 0) := x"0400";
+      sample_cycles : in std_logic_vector(15 downto 0) := x"0100";   -- a sample is this many runs of the panel state machine (which has 16 cycles, so multiply by that)
+      minon_cycles : in std_logic_vector(15 downto 0) := x"0100";    -- if a signal has been on for this many cycles in a sample, then the corresponding output will be on - note 16, above.
+
+      paneltype : in integer range 0 to 3 := 0;                      -- 0 - no console; 1 - PiDP11, regular; 2 - PiDP11, widdershins; 3 - PDP2011 nanocons
+
+      cons_reset : out std_logic;                                    -- a request for a reset from the console
 
       clkin : in std_logic;
       reset : in std_logic
    );
+end component;
+
+component de0adc is
+   port(
+      ad_start : in std_logic;
+      ad_done : out std_logic := '0';
+      ad_channel : in std_logic_vector(5 downto 0);
+      ad_nxc : out std_logic := '0';
+      ad_sample : out std_logic_vector(11 downto 0) := "000000000000";
+
+      adc_cs_n : out std_logic;
+      adc_saddr : out std_logic;
+      adc_sdat : in std_logic;
+      adc_sclk : out std_logic;
+
+      reset : in std_logic;
+      clk50mhz : in std_logic
+   );
+end component;
+
+component pmodda2 is
+   port(
+      da_daca : in std_logic_vector(11 downto 0);
+      da_dacb : in std_logic_vector(11 downto 0);
+
+      da_sync : out std_logic;
+      da_dina : out std_logic;
+      da_dinb : out std_logic;
+      da_sclk : out std_logic;
+
+      reset : in std_logic;
+      clk : in std_logic
+    );
 end component;
 
 component pll is
@@ -309,10 +387,22 @@ signal cpureset : std_logic := '1';
 signal cpuresetlength : integer range 0 to 63 := 63;
 
 signal ifetch: std_logic;
+signal cpu_addr_v : std_logic_vector(15 downto 0);
 signal txtx : std_logic;
 signal rxrx : std_logic;
 signal txtx1 : std_logic;
 signal rxrx1 : std_logic;
+
+signal ad_start : std_logic;
+signal ad_done : std_logic;
+signal ad_channel : std_logic_vector(5 downto 0);
+signal ad_nxc : std_logic;
+signal ad_sample : std_logic_vector(11 downto 0);
+
+signal da_dac1 : std_logic_vector(11 downto 0);
+signal da_dac2 : std_logic_vector(11 downto 0);
+signal da_dac3 : std_logic_vector(11 downto 0);
+signal da_dac4 : std_logic_vector(11 downto 0);
 
 signal have_rl : integer range 0 to 1;
 signal rl_cs : std_logic;
@@ -376,6 +466,8 @@ signal cons_map16 : std_logic;
 signal cons_map18 : std_logic;
 signal cons_map22 : std_logic;
 
+signal cons_reset : std_logic;
+
 signal sample_cycles : std_logic_vector(15 downto 0) := x"0400";
 signal minon_cycles : std_logic_vector(15 downto 0) := x"0400";
 
@@ -413,24 +505,60 @@ signal dram_fsm : dram_fsm_type := dram_init;
 
 begin
 
---   issp0: issp port map(
---      source => sample_cycles
---   );
---   issp1: issplim port map(
---      source => minon_cycles
---   );
+--  issp0: issp port map(
+--     source => sample_cycles
+--  );
+--  issp1: issplim port map(
+--     source => minon_cycles
+--  );
 
    pll0: pll port map(
       inclk0 => clkin,
       c0 => c0
    );
 
+   adc0: de0adc port map(
+      ad_start => ad_start,
+      ad_done => ad_done,
+      ad_channel => ad_channel,
+      ad_nxc => ad_nxc,
+      ad_sample => ad_sample,
+
+      adc_cs_n => adc_cs_n,
+      adc_saddr => adc_saddr,
+      adc_sdat => adc_sdat,
+      adc_sclk => adc_sclk,
+
+      reset => cpureset,
+      clk50mhz => clkin
+   );
+
+   dac0: pmodda2 port map(
+      da_daca => da_dac1,
+      da_dacb => da_dac2,
+
+      da_sync => da_sync0,
+      da_dina => da_dina0,
+      da_dinb => da_dinb0,
+      da_sclk => da_sclk0,
+
+      reset => cpureset,
+      clk => cpuclk
+   );
+
 --   c0 <= clkin;
 
    pdp11: unibus port map(
-      modelcode => 70,
+      modelcode => 24,
 
-      have_kl11 => 2,
+      have_mncad => 1,
+      have_mnckw => 2,
+      have_mncaa => 1,
+      have_mncdi => 1,
+      have_mncdo => 1,
+      have_diloopback => 0, 
+
+      have_kl11 => 1,
       tx0 => txtx,
       rx0 => rxrx,
       cts0 => cts,
@@ -445,7 +573,6 @@ begin
       kl1_force7bit => 1,
 
       have_rl => have_rl,
-      have_rl_debug => 1,
       rl_sdcard_cs => rl_cs,
       rl_sdcard_mosi => rl_mosi,
       rl_sdcard_sclk => rl_sclk,
@@ -453,7 +580,6 @@ begin
       rl_sdcard_debug => rl_sddebug,
 
       have_rk => have_rk,
-      have_rk_debug => 1,
       rk_sdcard_cs => rk_cs,
       rk_sdcard_mosi => rk_mosi,
       rk_sdcard_sclk => rk_sclk,
@@ -461,19 +587,28 @@ begin
       rk_sdcard_debug => rk_sddebug,
 
       have_rh => have_rh,
-      have_rh_debug => 1,
       rh_sdcard_cs => rh_cs,
       rh_sdcard_mosi => rh_mosi,
       rh_sdcard_sclk => rh_sclk,
       rh_sdcard_miso => rh_miso,
       rh_sdcard_debug => rh_sddebug,
 
-      have_xu => 1,
+      have_xu => 0,
       xu_cs => xu_cs,
       xu_mosi => xu_mosi,
       xu_sclk => xu_sclk,
       xu_miso => xu_miso,
       xu_debug_tx => xu_debug_tx,
+
+      ad_start => ad_start,
+      ad_done => ad_done,
+      ad_channel => ad_channel,
+      ad_nxc => ad_nxc,
+      ad_sample => ad_sample,
+      da_dac1 => da_dac1,
+      da_dac2 => da_dac2,
+      da_dac3 => da_dac3,
+      da_dac4 => da_dac4,
 
       cons_load => cons_load,
       cons_exa => cons_exa,
@@ -516,6 +651,7 @@ begin
       addr_match => dram_match,
 
       ifetch => ifetch,
+		cpu_addr_v => cpu_addr_v,
       reset => cpureset,
       clk50mhz => clkin,
       clk => cpuclk
@@ -558,14 +694,18 @@ begin
       cons_map18 => cons_map18,
       cons_map22 => cons_map22,
 
+      cons_reset => cons_reset,
+
       sample_cycles => sample_cycles,
       minon_cycles => minon_cycles,
+
+		paneltype => 3,
 
       clkin => cpuclk,
       reset => reset
    );
 
-   reset <= (not key0) ; -- or power_on_reset;
+   reset <= (not key0);
 
    tx <= txtx;
 	rxrx <= rx;
@@ -582,13 +722,14 @@ begin
 
    greenled <= ifetch & not rxrx & not rxrx1 & not txtx1 & sddebug;
 
+--   dram_match <= '1' when addr(21 downto 13) /= "111111111" else '0';
    dram_match <= '1' when addr(21 downto 18) /= "1111" else '0';
    dram_cke <= '1';
    dram_clk <= c0;
 
-   have_rh <= 1; have_rl <= 0; have_rk <= 0;
+   have_rh <= 0; have_rl <= 0; have_rk <= 1;
 
-   process(c0)
+   process(c0, reset)
    begin
       if c0='1' and c0'event then
 
@@ -753,6 +894,10 @@ begin
                      cpureset <= '0';
                   else
                      cpuresetlength <= cpuresetlength - 1;
+                  end if;
+                  if cons_reset = '1' then
+                     cpuresetlength <= 63;
+                     cpureset <= '1';
                   end if;
 
                cpuclk <= '1';

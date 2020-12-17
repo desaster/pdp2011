@@ -107,6 +107,9 @@ r = register
 2 = register + 2
   = ?
 
+   ffjj   f      j
+0 2227701223444678
+3 1333340044045004
 rRRRRRRrrRRrRrrRrRr  register as src, same reg in (r)+, @(r)+, -(r), @-(r), src is...
          (applies equally if reg is pc)
 
