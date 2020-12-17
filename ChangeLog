@@ -1,9 +1,575 @@
 
+11/22
+- the sync issue with the de0nano adc chip appeared again,
+  modified the driver to run on negative clock - if that
+  doesn't help, the next thing is to do half-clock sampling.
+- ugly hacks on m9312l/h to make enough room for all the
+  minc device names. This is as far as it will stretch -
+  it is time to start thinking about a new bootstrap trick.
+  I kind of like the VMNF device space mapping. But that doesn't
+  name the devices, and it'll take a lot of room too.
+
+
+11/21
+- fixed the last couple errors in mncad - to do with setting
+  the error bit correctly when the buffer has not been read
+  and a new conversion is being stored into it.
+- and that's it :-) feels like have-a-cigar time.
+
+XXDP-XM EXTENDED MONITOR - XXDP V2.5
+REVISION: F0
+BOOTED FROM DL0
+124KW OF MEMORY
+UNIBUS SYSTEM
+
+RESTART ADDRESS: 152000
+TYPE "H" FOR HELP !
+
+.C MNC11
+
+R VMNF??/1
+
+MD-11-CVMNF-C   MINC-11 OPTION SIZER PROGRAM
+
+
+OPERATOR        -       PLEASE DO THE FOLLOWING:
+
+REMOVE THE CUSTOMER CONNECTIONS FROM EACH "MINC-11" OPTION
+MNCAD (A/D)             SET FRONT PANEL SWITCHES TO THE "TEST" POSITION
+MNCAG (PREAMP)          SET FRONT PANEL SWITCHES TO THE "P" POSITION
+MNCKW (CLOCK)           PULL OUT "ST1" AND "ST2" SWITCHES
+                        AND ROTATE FULLY CLOCKWISE
+MNCDI (DIGITAL IN)      SET "DATA" SWITCH TO THE "-" POSITION
+SLU 0                   INSTALL "SLU TEST CONNECTOR"
+SLU 1                   INSTALL "SLU TEST CONNECTOR"
+SLU 2                   INSTALL "SLU TEST CONNECTOR"
+
+DEPRESS A KEY ON THE CONSOLE TERMINAL WHEN READY.
+  ;MNCAD AT ADDRESS = 171000   VECTOR = 400
+  ;MNCKW AT ADDRESS = 171020   VECTOR = 440
+  ;MNCKW AT ADDRESS = 171024   VECTOR = 450
+  ;MNCAA AT ADDRESS = 171060   VECTOR =  **  DOES NOT EXIST **
+  ;MNCDI AT ADDRESS = 171160   VECTOR = 130
+  ;MNCDO AT ADDRESS = 171260   VECTOR = 340
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  1  ;MNCDI  1  ;MNCDO  1
+END PASS #     1R VMNC??/1
+
+CVMNC-B MNCKW (CLOCK) DIAGNOSTIC
+
+PROGRAM DETECTED      2 MNCKW (CLOCK)'S
+END PASS #     1R VMNB??/1
+
+CVMNB-B MNCDI (DIGITAL IN) DIAGNOSTIC
+
+PROGRAM DETECTED     1 MNCDI (DIGITAL IN)'S
+MNCDI (DIGITAL IN) UNIT #     0
+EXPECTED INTERRUPT AT 120 RECEIVED INTERRUPT AT 130
+PLEASE CHECK VECTOR SWITCHES
+        RESTARTING LOGIC TEST
+END PASS #     1R VMNE??/1
+
+CVMNE-A MNCDO (DIGIAL OUT) DIAGNOSTIC
+
+PROGRAM DETECTED      1 MNCDO (DIGITAL OUT)'S  �
+END PASS #     1R VMND??/1
+
+CVMND-A  MNCAA (D/A) DIAGNOSTIC
+
+PROGRAM DETECTED      1 MNCAA (D/A)'S
+END PASS #     1R VMNA??/1
+
+CVMNA-C    MNCAD (A/D) DIAGNOSTIC
+
+PROGRAM DETECTED      1 MNCAD (A/D)'S
+
+END PASS #     1R VMNG??/1
+
+CVMNG-A MINC-11 CHAIN TERMINATOR PROGRAM
+
+
+OPERATOR  -    THE AUTOMATIC RUNNING OF THE DIAGNOSTICS HAS NOW BEEN COMPLETED
+
+
+
+11/20
+- fixed an issue in MNCKW - the handshake of the counter
+  overflow signal did not work when the kwcsr_ovfflag was
+  already set; thus an overflow of the kwcsr_ovfflag could
+  never occur. Added a proper cdc for that signal now.
+- fixed an issue in MNCKW - apparently, if the st2goenable
+  bit is set, and the st2 fires causing the go bit to be set,
+  the st2goenable bit should be reset.
+- fixed an issue in MNCKW - the clock start condition in the
+  clock-clocked part of the MNCKW was wrong. In short; the
+  clock needs to be preloaded with the preload value when
+  the clock is stopped and the rate is not 6; and when the
+  clock has overflowed and the mode is 1. That seems to fix
+  all errors from VMNC.
+- fixed some errors in MNCAD - primarily by moving the nxc
+  logic into direct logic.
+
+This is what is left:
+
+MNCAD (A/D)     STATUS REG. ERROR
+UNIT    ERRPC   STREG  EXPECTED ACTUAL
+000000  005534  171000  100200  000200
+
+
+MNCAD (A/D)     STATUS REG. ERROR
+UNIT    ERRPC   STREG  EXPECTED ACTUAL
+000000  005620  171000  100000  000000
+
+
+Here's VMNC:
+  Hello, world [t47]: cpu 11/24 fpu
+177776           psw
+177766           cer
+177736 - 177734
+177656 - 177640
+177616 - 177600  pdr/par
+177576 - 177572  mmu
+177570           sdr
+177566 - 177560  kl
+177546           kw
+174406 - 174400  rl
+173776 - 173000  m9312
+172516           mmu
+172356 - 172340
+172316 - 172300  pdr/par
+171262 - 171260
+171166 - 171160
+171066 - 171060
+171026 - 171020  minc
+171002 - 171000  minc
+170376 - 170200  ubm
+165776 - 165000  m9312
+
+boot from rl:
+
+
+
+BOOTING UP XXDP-XM EXTENDED MONITOR
+
+
+XXDP-XM EXTENDED MONITOR - XXDP V2.5
+REVISION: F0
+BOOTED FROM DL0
+124KW OF MEMORY
+UNIBUS SYSTEM
+
+RESTART ADDRESS: 152000
+TYPE "H" FOR HELP !
+
+.R VMNC??
+VMNCB1.BIC
+
+CVMNC-B MNCKW (CLOCK) DIAGNOSTIC
+
+PANEL: PULL OUT BOTH ST POTS AND THEN TURN
+       THEM COMPLETELY CW OR CCW
+DWARF: S2  ALL SWITCHES OFF
+
+L = LOGIC TEST WITH NO TEST MODULE CONNECTED
+D = LOGIC TEST WITH A TEST MODULE CONNECTED TO ONE UNIT
+G = GET NEW SWITCH REGISTER VALUE
+B = BASE OR VECTOR ADDRESS CHANGE
+H = HELP THE OPERATOR AND RETYPE THIS LIST
+TYPE THE "TEST CHARACTER" THEN DEPRESS "RETURN KEY"  L
+
+PROGRAM DETECTED      2 MNCKW (CLOCK)'S
+END PASS #     1
+END PASS #     2
+END PASS #     3
+END PASS #     4
+END PASS #     5
+END PASS #     6
+END PASS #     7
+
+
+
+11/16
+- on establishing an RK image with MINC software on:
+  - MINC needs SJ, the version on the floppies is V03B
+  - MINC needs the SP and VM devices (what are they?)
+    http://bitsavers.org/bits/DEC/pdp11/discimages/rk05/AN-5752B-BC_RT-11_V03B.dsk.gz
+    http://bitsavers.org/bits/DEC/pdp11/floppyimages/minc/rx02/BA_J836B-BC_MINC_MA_SYS_23_V2.0_BIN_RX2.img
+    http://bitsavers.org/bits/DEC/pdp11/floppyimages/minc/rx02/BA-J837B-BC_MINC_MA_DEMO_23_V2.0_BIN_RX2.img
+
+10 T=0
+20 I=120
+100 SCHEDULE('Interval',I,200)
+110 IF T=1 THEN 230
+120 AOUT(,4096*RND-2048)
+130 PAUSE(1/4)
+160 GO TO 110
+200 T=1
+210 RETURN
+230 PRINT "interval!"
+240 END
+
+
+11/12
+- removed a lot of old and no longer very useful files
+  from the version management.
+- fixed a timing issue in the de0nano a/d frontend
+- changed the mapping of the ad channel for the max10
+  a/d frontend. The temp sensor is now back to it's proper
+  channel 17, channel 0 is mapped to channel 1, and so is
+  any channel over 6, for now - since those are the channels
+  that are actually available on the de10-lite board. Maybe
+  some variants will pop up later, like for the max1k board,
+  but those will likely be easy copies of the same.
+
+
+11/11
+- fixed the last 4 errors in vmne(+loopback)
+- merged the minc work repo back into the main.
+- changed sdspi to use regular dual ported ram
+  instead of a shared variable - and set up a
+  variable for the read of wsector, since
+  quartus 20 didn't understand the old code.
+
+BOOTING UP XXDP-XM EXTENDED MONITOR
+
+
+XXDP-XM EXTENDED MONITOR - XXDP V2.5
+REVISION: F0
+BOOTED FROM DL0
+124KW OF MEMORY
+UNIBUS SYSTEM
+
+RESTART ADDRESS: 152000
+TYPE "H" FOR HELP !
+
+.R VMNF??
+VMNFC0.BIC
+
+MD-11-CVMNF-C   MINC-11 OPTION SIZER PROGRAM
+
+DO YOU WANT THE MNCAD (A/D) CHANNEL MODE REPORT ?
+                TYPE "Y" FOR YES =
+DO YOU WANT THE MEMORY USAGE MAP REPORT ?
+                TYPE "Y" FOR YES =
+  ;MNCAD AT ADDRESS = 171000   VECTOR = 400
+                 0 -  7 SINGLE ENDED
+                10 - 17 SINGLE ENDED
+
+  ;MNCKW AT ADDRESS = 171020   VECTOR = 440
+  ;MNCKW AT ADDRESS = 171024   VECTOR = 450
+  ;MNCAA AT ADDRESS = 171060   VECTOR =  **  DOES NOT EXIST **
+  ;MNCDI AT ADDRESS = 171160   VECTOR = 130
+  ;MNCDO AT ADDRESS = 171260   VECTOR = 340
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  1  ;MNCDI  1  ;MNCDO  1
+MINC-11 MEMORY USAGE MAP        (EACH BIT = 2 ADDRESSES)
+ ADDR       000/400          100/500          200/600          300/700
+170000 0000000000000000 0000000000000000 1111111111111111 1111111111111111
+170400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+171000 1000110000001100 0000000000001100 0000000000001000 0000000000000000
+171400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+172000 0000000000000000 0000000000000000 0000000000000000 1111000011110000
+172400 0000000000000000 0001000000000000 0000000000000000 0000000000000000
+173000 1111111111111111 1111111111111111 1111111111111111 1111111111111111
+173400 1111111111111111 1111111111111111 1111111111111111 1111111111111111
+174000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+174400 1100000000000000 0000000000000000 0000000000000000 0000000000000000
+175000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+175400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+176000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+176400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+177000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+177400 0000000000000000 0000000001001111 1111000011110000 0000000100000101
+
+END PASS #     1
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  1  ;MNCDI  1  ;MNCDO  1
+
+
+
+11/10
+- fixed the last couple errors in mncdi. There are 4 left over
+  now, and those are to do with the transition detection - that
+  isn't there yet. And that is in the loopback test; the logic
+  test is clean.
+  Oh and there's the weird message
+EXPECTED INTERRUPT AT 120 RECEIVED INTERRUPT AT 130
+PLEASE CHECK VECTOR SWITCHES
+        RESTARTING LOGIC TEST
+  still. No clue what that is about. 120 is the XU vector.
+- fixed an issue in mncdo; the maintenance bit there was in the
+  high csr byte, not bit 0 but bit 8.
+- there's still the halt@12172 in mncdo/vmne; it seems to be
+  because the stack overruns the vector area. Maybe a timing
+  issue? Other than that, it's clean too - it seems to depend
+  on some build issue... oh wait - there was mention somewhere
+  that vmne shouldn't run when loopback is enabled, maybe that
+  is it? ah yes, it is in the xmnb listing.
+- so:
+loopback   di L  di W  do L  do D
+      on      C     4     H     H
+     off      C     L     C     1
+where C=clean
+      L=looping; not really investigated yet
+      H=halt
+      n=number of error reports per run
+
+  maybe next up should be A and C - there are quite a few
+  messages from A still, and those should be fairly easy
+  to fix given that there's a listing of that one...
+
+
+11/9
+- connected di and do to the leds and switches on de10l and did
+  some experiments. Turns out:
+10 DIN_MASK(15)
+20 DIN(,V%,,1)
+30 PRINT V%
+40 GO TO 20
+  shows that the masking is done by the software - it does not
+  have any impact on the stimulus bits or mode. That kind of
+  explains one of the mysteries there.
+- also, DIN does unstrobed input - which di didn't allow for.
+  Does now, but needs a regression over the vmnX tests.
+- ok, that works - and the issue with the mncdo interrupt is
+  caused by the loopback being off. The crash isn't though.
+
+
+11/7
+- more work on mncdi - things are slowly becoming clear. What a weird
+  module though. Down to 22 errors from vmnb now, and most of those are
+  repeats for a floating bit too it seems. In fact, seems like there's
+  maybe three distinct errors left:
+EXPECTED INTERRUPT AT 120 RECEIVED INTERRUPT AT 130
+PLEASE CHECK VECTOR SWITCHES
+        RESTARTING LOGIC TEST
+MNCDI MNCDO     DIGITAL INPUT-OUTPUT WRAPAROUND STATUS ERROR
+UNIT    ERRPC   OUTCSR  IN CSR  GOOD     BAD
+000000  007036  171260  171160  000004  000204
+
+MNCDI MNCDO     DIGITAL INPUT-OUTPUT WRAPAROUND STATUS ERROR
+UNIT    ERRPC   OUTCSR  IN CSR  GOOD     BAD
+000000  007602  171260  171160  000004  000204
+
+MNCDI MNCDO     DIGITAL INPUT-OUTPUT WRAPAROUND STATUS ERROR
+UNIT    ERRPC   OUTCSR  IN CSR  GOOD     BAD
+000000  007762  171260  171160  100604  000604
+
+  The vector thing is weird though - haven't investigated it so far.
+
+
+11/5
+- fixed an apparent bug in mnckw - from testing, it appears that the
+  minc clock does not set the overflow flag upon reading the count by
+  st2 while in mode 2/3 - the way I had implemented that was based on
+  the lps documentation, but since the mnckw has a dedicated st2 flag,
+  there is no real cause to set the overflow flag in this case. Seems
+  to have no significant effect on vmnc either; count is down to 10
+  errors per run now.
+
+
+11/3
+- adding mncdi, mncdo. mncdo is by far simpler, there seems to be some
+  crazy logic going on in di - it's not by far finished. do passes the
+  vmne maindec though ;-)
+- oh btw:
+VMNA - mncad
+VMNB - mncdi
+VMNC - mnckw
+VMND - mncaa
+VMNE - mncdo
+VMNF - sizer
+
+
+10/28
+- added a pmodda2 frontend for the mncaa. Works nicely, even though
+  it only does two channels. This for instance:
+10 X=-2048
+20 AOUT(,X)
+30 X=X+250
+40 IF X>2047 THEN X=-2048
+50 AOUT(,RND*4096-2048,,,1)
+60 GO TO 20
+
+
+10/27
+
+test1:
+10 FOR I=0 TO 7
+20 AIN(,X,1,1,I,1)
+30 PRINT X;
+40 NEXT I
+50 PRINT
+60 GO TO 10
+
+test2:
+5 DIM V(8)
+10 AIN(,V(),8,2,0,8)
+20 FOR I=0 TO 7
+30 PRINT V(I);
+40 NEXT I
+50 PRINT
+60 GO TO 10
+
+test3:
+5 DIM V(8)
+10 AIN(,V(),8,1/2,0,1)
+20 FOR I=0 TO 7
+30 PRINT V(I);
+40 NEXT I
+50 PRINT
+60 GO TO 10
+
+
+10/26
+- adding ready-made bitstreams for the cyc1000 board. I'm setting this
+  up as separate Quartus projects for each bitstream - and with the
+  intent of leaving the config attributes in those projects stable, so
+  that generating new bitstreams as and when needed will be easier and
+  more predictable.
+  There will be these projects:
+  cons-c1k-rk : 11/70, fpu, rk, no xu, 1kl (usb/ftdi), PiDP console
+  cons-c1k-rl : 11/70, fpu, rl, no xu, 1kl (usb/ftdi), PiDP console
+  cons-c1k-rh : 11/70, fpu, rh+rp06, no xu, 1kl (usb/ftdi), PiDP console
+  cons-c1k-rhxu : 11/70, fpu, rh+rp06, xu, 1kl (usb/ftdi), PiDP console
+  Setting this up so that at least these four can be built automatically,
+  it's not so much faster necessarily but the gui work takes a bit of
+  time that can be avoided.
+
+
+10/25
+- after doing some preliminary work yesterday to interface the adc
+  chip on de0nano, today took the result of that and hooked it into
+  the mncad. And works ;-) way too late now though, need to sleep.
+  Oh yes and the nice thing about it is: it should be fairly easy
+  to hook up other adc types, or even multiples.
+
+
+10/23
+- playing about with minc basic a bit. This kind-of works. Except for
+  that the adc values are still dummy.
+10 FOR I=0 TO 7
+20 AIN(,X,1,1,I,1)
+30 PRINT I,X
+40 NEXT I
+
+
+10/22
+- down to 11 errors in a vmnc run. But, the last one - called 12264
+  after the pc in the message - I'm not really sure I like the fix,
+  because I can't find anything that sort-of underpins how it works
+  in the schematics. The issue is that apparently the test expects
+  the counter to be reset if it gets an ST1 count pulse while the
+  rate is set to 0. Seems kind of plausible, but there should be
+  an obvious clue in the schematic, but I can't seem to find anything
+  at all that refers to the rate and resets the counter.
+- integrated mnckw and mncad together. Somehow that introduces weird
+  errors into vmna - not sure yet why. Maybe time to add some real
+  a/d functionality to mncad.
+
+10/20
+- added some more obscure features to mnckw, including the st driven
+  interrupts, the internal oscillator disabled mode. Not quite there
+  yet, but the number of errors from vmnc is now down to 13 per run.
+
+
+10/18
+- found out that mode 6 on the mnckw is actually slightly more complex
+  than just pulses from st1. There's some 1MHz signal coming in to it,
+  according to the schematic. Is that just for the pulse width, or
+  something else? just treating it like a 1MHz source allows vmnf to
+  properly detect the mnckw and vector - progress has been made :-)
+  and, not sure how else it is supposed to work - no other bits are
+  being set in the csr.
+- added mncaa. That was easy... well, the actual d/a isn't there yet.
+- ah. Upon closer examination, kwcsr bit 8 is a write-only bit that
+  simulates an ST1 fire. And bit 9 the same for ST2 - found it in
+  the schematic as well.
+  Now how to get that reliably cross-clock, need to sleep on that.
+
+
+10/16
+- added some more csr fields to mnckw - found some hints in the schematics.
+- changed the interrupt priority to 6 for a test. Probably does not
+  belong there though.
+
+
+10/15
+- done some work on mnckw. No source for the proper maindec for that...
+  only an x11 module. Not the same, and hardly any information to
+  be found in it. Slow going.
+
+
+10/14
+- added a branch to git to do development on the minc and lps modules in.
+- started on mncad and mnckw. Using vmna maindec to reverse engineer the
+  mncad functionality - seems to work too, because the logic test passes
+  with few errors now. No real a/d connected yet though, all dummy data
+  so far.
+
+
+10/12
+- so, to sum things up regarding proper /24 support:
+  from the list in EK-11024-TM-001_PDP11_24_System_Technical_Manual_Jun81.pdf,
+  in table 9-4:
+  - JKDB passes
+  - JKDA passes
+  - JKDF gets stuck, for now at least because it looks for a serial port that isn't there
+  - ZM9B complains about roms that are not there. Might be worth
+         investigating at some point - those probably contain the
+         ODT. And the sources for that are around somewhere.
+  - KKUA passes
+  - ZMSD gets stuck - not sure why, but it is about a memory card
+  - ZKAQ passes
+  - JKDC bails on an error in the FPS bits for an instruction that loads
+         the undefined value. Can't easily fix that because the FPS bits
+         are not defined - and they likely depend on something stuck in
+         the floating point alu, but that does not run for undefined
+         values - those are already caught by the cpu state machine.
+  - JKDD seems to get stuck in a loop.
+  - JKDH crashes on an illegal instruction - it tests the CISP.
+  All in all, pretty happy about this - apart from the FP stuff, but that
+  is about an insignificant edge case. And, both JFPA and JFPB pass without
+  error.
+  Possibly http://bitsavers.org/pdf/dec/pdp11/1123/EK-KDF11-UG-PR2_Mar79.pdf
+  has more detail on the exact fps bit behavior - it might be instruction
+  dependent, even though in the real FP11 also the instructions do not
+  execute.
+
+10/11
+- added support for the programming differences #1 through #3, fixed #29
+  which was incorrectly applied to 23/24, and fixed an inconsistency in
+  the have_ variables for the red stack trap. And made the post-state
+  machine nxm handling conditional on the red stack not being in progress,
+  because otherwise the cpu will keep looping to a trap 4.
+- JKDB now passes without error for /24 :-)
+
+
+10/9
+- added some more 23/24 f11 quirkyness - the LMA control register for the
+  unibus map. From what KKUA tests, it works slightly different than the
+  doc says...
+  1) it also records mappings when the unibus map is not enabled.
+  2) the c1 bit is on for byte accesses, the c0 for writes. Weird.
+
+
+10/8
+- continuing 23/24 work. However, noted that most MINC stuff is actually
+  11/03 - and that uses the horrible FIS floating point style. So the chain
+  of diagnostics that I started working on will not really help much. Still,
+  VKAA now passes - it needed a proper implementation of the don't-detect-
+  odd-addresses feature.
+
+
+10/6
+- doing some work on 11/23 and 11/24 - preparing for a potential future minc
+  implementation. Found that xxdp25 will not boot, made some minor changes
+  of what seemed to be mostly mistakes in the cpu and cr sources. That helps,
+  xxdp25 now boots.
+
+
 7/11
 - lowering the clock on c1k to 140Mhz, 168 works with reduced configurations
   but not with the full 11/70+fpu+rp+xu, it seems. Maybe with the right
   fitter options.
-  
+
 
 2020/7/9
 - reorganizing the rk11 work into the main branch

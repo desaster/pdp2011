@@ -49,6 +49,11 @@ entity cr is
       cpu_ysv : in std_logic;
       cpu_rsv : in std_logic;
 
+-- lma (f11)
+      mmu_lma_c1 : in std_logic;
+      mmu_lma_c0 : in std_logic;
+      mmu_lma_eub : in std_logic_vector(21 downto 0);
+
 -- maintenance register (j11)
       cpu_kmillhalt : out std_logic;
 
@@ -86,9 +91,16 @@ signal ccr : std_logic_vector(5 downto 0);
 
 signal kmillhalt : std_logic;
 
+signal lma_fj : std_logic;
+
+signal f11 : integer range 0 to 1;
 signal j11 : integer range 0 to 1;
 
 begin
+
+   with modelcode select f11 <=
+      1 when 23 | 24,
+      0 when others;
 
    with modelcode select j11 <=
       1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
@@ -96,6 +108,8 @@ begin
 
    base_addr_match <= '1' when
       bus_addr(17 downto 5) = "1111111111111"
+   or
+      (f11 = 1 and bus_addr(17 downto 3) = o"77773" and bus_addr(2) = '1')
    or
       (j11 = 1 and bus_addr(17 downto 3) = o"77773")
    or
@@ -132,6 +146,7 @@ begin
 
    process(clk, reset)
    begin
+
       if clk = '1' and clk'event then
          if reset = '1' then
 
@@ -159,6 +174,10 @@ begin
 
 -- mr
             kmillhalt <= '0';
+
+            if f11 = 1 then
+               lma_fj <= '0';
+            end if;
 
          else
 
@@ -191,7 +210,7 @@ begin
 
             nxm <= '0';
 
-            if base_addr_match = '1' and (bus_control_dati = '1' or bus_control_dato = '1') then
+            if bus_addr(17 downto 5) = "1111111111111" and (bus_control_dati = '1' or bus_control_dato = '1') then
                case bus_addr(4 downto 1) is
 
 -- 17 777 776
@@ -275,7 +294,7 @@ begin
 
 -- 17 777 766
                   when "1011" =>                           -- cer
-                     if modelcode = 24
+                     if modelcode = 23 or modelcode = 24
                      or modelcode = 44
                      or modelcode = 70
                      or modelcode = 73 or modelcode = 83 or modelcode = 84 or modelcode = 93 or modelcode = 94
@@ -379,8 +398,7 @@ begin
 
 -- 17 777 750
                   when "0100" =>                           -- maintenance register, EK-KB11C-TM-001_1170procMan.pdf pg. VI-4-21
-                     if modelcode = 23
-                     or modelcode = 44
+                     if modelcode = 44
                      or modelcode = 70
                      or modelcode = 53
                      then
@@ -494,9 +512,30 @@ begin
 
             end if;
 
+-- f11 specific control registers
+
+            if f11 = 1 then
+
+               if bus_addr(17 downto 3) = o"77773" and bus_addr(2) = '1' and (bus_control_dati = '1' or bus_control_dato = '1') then
+                  case bus_addr(1) is
+                     when '0' =>
+                        if bus_control_dati = '1' then
+                           bus_dati <= mmu_lma_eub(15 downto 0);
+                        end if;
+                     when '1' =>
+                        if bus_control_dati = '1' then
+                           bus_dati <= mmu_lma_c1 & mmu_lma_c0 & "0000000" & lma_fj & mmu_lma_eub(21 downto 16);
+                        end if;
+                        if bus_control_dato = '1' then
+                           lma_fj <= bus_dato(6);
+                        end if;
+                  end case;
+               end if;
+
+            end if;
 
 -- j11 specific control registers
-            if modelcode = 73 or modelcode = 83 or modelcode = 84 or modelcode = 93 or modelcode = 94 then
+            if j11 = 1 then
 
                if bus_addr(17 downto 3) = o"77773" and (bus_control_dati = '1' or bus_control_dato = '1') then
 

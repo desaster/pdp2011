@@ -432,6 +432,10 @@ signal have_psw8 : integer range 0 to 1;
 signal have_stacklimit_full : integer range 0 to 1;
 signal have_stacklimit_simple : integer range 0 to 1;
 
+signal have_issue1 : integer range 0 to 1;
+signal have_issue2 : integer range 0 to 1;
+signal have_issue3 : integer range 0 to 1;
+
 
 begin
    cpuregs0: cpuregs port map(
@@ -1016,14 +1020,6 @@ begin
       1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
       0 when others;
 
-   with modelcode select have_red <=
-      1 when 35 | 40,
-      1 when 45 | 50 | 55,
-      1 when 60,
-      1 when 70,
-      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
-      0 when others;
-
    with modelcode select have_kmwaitonly <=
       1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
       0 when others;
@@ -1078,6 +1074,17 @@ begin
       1 when 44,
       1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
       0 when others;
+
+   have_red <= 1 when have_stacklimit_full = 1 or have_stacklimit_simple = 1
+   else 0;
+
+   with modelcode select have_issue1 <=
+      1 when 15 | 20 | 35 | 40,
+      1 when 23 | 24,                  -- kdf11
+      1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
+      0 when others;
+   have_issue2 <= have_issue1;
+   have_issue3 <= have_issue2;
 
 
 -- state sequencer
@@ -2357,6 +2364,7 @@ begin
                         state <= state_fptrap;
                      elsif ir_jmp = '1' or ir_jsr = '1' then
                         if modelcode = 34
+                        or modelcode = 23 or modelcode = 24
                         or modelcode = 4                                                 -- verified 04 behaviour by running gkab
                         then
                            trap_vector <= o"004";
@@ -3333,16 +3341,26 @@ begin
 
                   when state_src0 =>
 
--- handle issue 3 in programming differences list
-                     if ir_dop = '1' and ir(8 downto 6) = "111"
-                     and (ir(5 downto 4) = "11")
-                     and (
-                        modelcode = 15 or modelcode = 20 or modelcode = 35 or modelcode = 40
-                        or modelcode = 53
-                        or modelcode = 73 or modelcode = 83 or modelcode = 84 or modelcode = 93 or modelcode = 94
-                     )
+-- handle issue 1 through 3 in programming differences list
+                     if ir_dop = '1' and ir(8 downto 6) = "111"      -- if double operand instruction and r7 is the source
+                     and (ir(5 downto 4) = "11")                     -- for dest modes 6 and 7
+                     and have_issue3 = 1
                      then
                         alus_input <= rbus_data_p2;
+                        state <= psrcstate;
+                        rbus_ix <= ir(2 downto 0);
+                     elsif ir_dop = '1' and ir(5 downto 4) = "01"    -- double operand and dest mode 2 or 3
+                     and ir(8 downto 6) = ir(2 downto 0)             -- and source and dest registers are the same
+                     and ((ir(3) = '0' and have_issue1 = 1) or (ir(3) = '1' and have_issue2 = 1))
+                     then
+                        alus_input <= rbus_data_p2;
+                        state <= psrcstate;
+                        rbus_ix <= ir(2 downto 0);
+                     elsif ir_dop = '1' and ir(5 downto 4) = "10"    -- double operand and dest mode 4 or 5
+                     and ir(8 downto 6) = ir(2 downto 0)             -- and source and dest registers are the same
+                     and ((ir(3) = '0' and have_issue1 = 1) or (ir(3) = '1' and have_issue2 = 1))
+                     then
+                        alus_input <= rbus_data_m2;
                         state <= psrcstate;
                         rbus_ix <= ir(2 downto 0);
                      else
@@ -3540,7 +3558,6 @@ begin
                      dest_addr <= addr;
                      alu_input <= datain;
                      state <= pdststate;
-                     rbus_ix <= "110";
 
                   when state_src7 =>
                      r7 <= r7p2;
@@ -3622,7 +3639,7 @@ begin
             end if;
 
             if nxmabort = '1' then
-               if modelcode = 34                                                         -- FIXME, if this is disabled for these models, FKAB, KKAB will fail. However, if enabled for 45, unix v7 will fail during /etc/rc processing.
+               if modelcode = 34                           -- issue #29 on the programming differences list : if register contains nxm in mode 2 and a bus error occurs, the register is unchanged for /44,/04 and /34
                or modelcode = 44
                or modelcode = 04
                then
@@ -3635,11 +3652,13 @@ begin
                      sr1_dstd <= "00000";
                   end if;
                end if;
-               if run = '1' then
-                  trap_vector <= o"004";
-                  state <= state_trap;
-               else
-                  state <= state_halt;
+               if red_stack_trap = '0' then
+                  if run = '1' then
+                     trap_vector <= o"004";
+                     state <= state_trap;
+                  else
+                     state <= state_halt;
+                  end if;
                end if;
             end if;
 
@@ -3687,7 +3706,7 @@ begin
                else
                   alu_psw(2) <= '0';
                end if;
-               if modelcode = 15 or modelcode = 20 then
+               if modelcode = 15 or modelcode = 20 then              -- issue #6
                   alu_psw(1) <= psw(1);
                else
                   alu_psw(1) <= '0';

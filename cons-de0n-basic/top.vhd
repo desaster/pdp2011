@@ -1,4 +1,4 @@
-
+ 
 --
 -- Copyright (c) 2008-2020 Sytse van Slooten
 --
@@ -62,7 +62,19 @@ entity top is
       dram_we_n : out std_logic;
       dram_cs_n : out std_logic;
 
+      -- pmodda2
+      da_dina0 : out std_logic;
+      da_dinb0 : out std_logic;
+      da_sclk0 : out std_logic;
+      da_sync0 : out std_logic;
+
       -- board peripherals
+      adc_cs_n : out std_logic;
+      adc_saddr : out std_logic;
+      adc_sdat : in std_logic;
+      adc_sclk : out std_logic;
+
+      sw : in std_logic_vector(3 downto 0);
       greenled : out std_logic_vector(7 downto 0);
       key0 : in std_logic;
       key1 : in std_logic;
@@ -176,6 +188,38 @@ component unibus is
       dr11c_dxm : out std_logic;                                     -- data transmitted : dr11c_in data has been read by the cpu
       dr11c_init : out std_logic;                                    -- unibus reset propagated out to the user device
 
+-- minc-11
+
+      have_mncad : in integer range 0 to 1 := 0;                     -- mncad: a/d, max one card in a system
+      have_mnckw : in integer range 0 to 2 := 0;                     -- mnckw: clock, either one or two
+      have_mncaa : in integer range 0 to 1 := 0;                     -- mncaa: d/a
+      have_mncdi : in integer range 0 to 1 := 0;                     -- mncdo: digital in
+      have_mncdo : in integer range 0 to 1 := 0;                     -- mncdo: digital out
+      ad_start : out std_logic;                                      -- interface from mncad to a/d hardware : '1' signals to start converting
+      ad_done : in std_logic := '1';                                 -- interface from mncad to a/d hardware : '1' signals to the mncad that the a/d has completed a conversion
+      ad_channel : out std_logic_vector(5 downto 0);                 -- interface from mncad to a/d hardware : the channel number for the current command
+      ad_nxc : in std_logic := '1';                                  -- interface from mncad to a/d hardware : '1' signals to the mncad that the required channel does not exist
+      ad_sample : in std_logic_vector(11 downto 0) := "000000000000";-- interface from mncad to a/d hardware : the value of the last sample
+      kw_st1in : in std_logic := '0';                                -- mnckw0 st1 signal input, active on rising edge
+      kw_st2in : in std_logic := '0';                                -- mnckw0 st2 signal input, active on rising edge
+      kw_st1out : out std_logic;                                     -- mnckw0 st1 output pulse (actually : copy of the st1flag in the csr
+      kw_st2out : out std_logic;                                     -- mnckw0 st2 output pulse
+      kw_clkov : out std_logic;                                      -- mnckw0 clkovf output pulse
+      da_dac1 : out std_logic_vector(11 downto 0);
+      da_dac2 : out std_logic_vector(11 downto 0);
+      da_dac3 : out std_logic_vector(11 downto 0);
+      da_dac4 : out std_logic_vector(11 downto 0);
+      have_diloopback : in integer range 0 to 1 := 0;                -- set to 1 to loop back mncdo0 to mncdi0 internally for testing
+      di_dir : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi0 data input register
+      di_strobe : in std_logic := '0';
+      di_reply : out std_logic;
+      di_pgmout : out std_logic;
+      di_event : out std_logic;
+      do_dor : out std_logic_vector(15 downto 0);
+      do_hb_strobe : out std_logic;
+      do_lb_strobe : out std_logic;
+      do_reply : in std_logic := '0';
+
 -- cpu console, switches and display register
       have_csdr : in integer range 0 to 1 := 1;
 
@@ -282,6 +326,39 @@ component paneldriver is
    );
 end component;
 
+component de0adc is
+   port(
+      ad_start : in std_logic;
+      ad_done : out std_logic := '0';
+      ad_channel : in std_logic_vector(5 downto 0);
+      ad_nxc : out std_logic := '0';
+      ad_sample : out std_logic_vector(11 downto 0) := "000000000000";
+
+      adc_cs_n : out std_logic;
+      adc_saddr : out std_logic;
+      adc_sdat : in std_logic;
+      adc_sclk : out std_logic;
+
+      reset : in std_logic;
+      clk50mhz : in std_logic
+   );
+end component;
+
+component pmodda2 is
+   port(
+      da_daca : in std_logic_vector(11 downto 0);
+      da_dacb : in std_logic_vector(11 downto 0);
+
+      da_sync : out std_logic;
+      da_dina : out std_logic;
+      da_dinb : out std_logic;
+      da_sclk : out std_logic;
+
+      reset : in std_logic;
+      clk : in std_logic
+    );
+end component;
+
 component pll is
    port(
       inclk0 : in std_logic := '0';
@@ -315,6 +392,17 @@ signal txtx : std_logic;
 signal rxrx : std_logic;
 signal txtx1 : std_logic;
 signal rxrx1 : std_logic;
+
+signal ad_start : std_logic;
+signal ad_done : std_logic;
+signal ad_channel : std_logic_vector(5 downto 0);
+signal ad_nxc : std_logic;
+signal ad_sample : std_logic_vector(11 downto 0);
+
+signal da_dac1 : std_logic_vector(11 downto 0);
+signal da_dac2 : std_logic_vector(11 downto 0);
+signal da_dac3 : std_logic_vector(11 downto 0);
+signal da_dac4 : std_logic_vector(11 downto 0);
 
 signal have_rl : integer range 0 to 1;
 signal rl_cs : std_logic;
@@ -429,12 +517,48 @@ begin
       c0 => c0
    );
 
+   adc0: de0adc port map(
+      ad_start => ad_start,
+      ad_done => ad_done,
+      ad_channel => ad_channel,
+      ad_nxc => ad_nxc,
+      ad_sample => ad_sample,
+
+      adc_cs_n => adc_cs_n,
+      adc_saddr => adc_saddr,
+      adc_sdat => adc_sdat,
+      adc_sclk => adc_sclk,
+
+      reset => cpureset,
+      clk50mhz => clkin
+   );
+
+   dac0: pmodda2 port map(
+      da_daca => da_dac1,
+      da_dacb => da_dac2,
+
+      da_sync => da_sync0,
+      da_dina => da_dina0,
+      da_dinb => da_dinb0,
+      da_sclk => da_sclk0,
+
+      reset => cpureset,
+      clk => cpuclk
+   );
+
 --   c0 <= clkin;
 
    pdp11: unibus port map(
-      modelcode => 70,
+      modelcode => 24,
 
-      have_kl11 => 2,
+      have_mncad => 1,
+      have_mnckw => 2,
+      have_mncaa => 1,
+      have_mncdi => 1,
+      have_mncdo => 1,
+      have_diloopback => 0, 
+
+      have_kl11 => 1,
       tx0 => txtx,
       rx0 => rxrx,
       cts0 => cts,
@@ -469,12 +593,22 @@ begin
       rh_sdcard_miso => rh_miso,
       rh_sdcard_debug => rh_sddebug,
 
-      have_xu => 1,
+      have_xu => 0,
       xu_cs => xu_cs,
       xu_mosi => xu_mosi,
       xu_sclk => xu_sclk,
       xu_miso => xu_miso,
       xu_debug_tx => xu_debug_tx,
+
+      ad_start => ad_start,
+      ad_done => ad_done,
+      ad_channel => ad_channel,
+      ad_nxc => ad_nxc,
+      ad_sample => ad_sample,
+      da_dac1 => da_dac1,
+      da_dac2 => da_dac2,
+      da_dac3 => da_dac3,
+      da_dac4 => da_dac4,
 
       cons_load => cons_load,
       cons_exa => cons_exa,
@@ -593,7 +727,7 @@ begin
    dram_cke <= '1';
    dram_clk <= c0;
 
-   have_rh <= 0; have_rl <= 1; have_rk <= 0;
+   have_rh <= 0; have_rl <= 0; have_rk <= 1;
 
    process(c0, reset)
    begin

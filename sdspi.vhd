@@ -55,8 +55,8 @@ end sdspi;
 architecture implementation of sdspi is
 
 type buffer_type is array(0 to 255) of std_logic_vector(15 downto 0);
-shared variable rsector : buffer_type;
-shared variable wsector : buffer_type;
+signal rsector : buffer_type;
+signal wsector : buffer_type;
 
 type sd_states is (
    sd_reset,
@@ -154,7 +154,7 @@ begin
          if enable = 1 then
             sdcard_xfer_out <= rsector(sdcard_xfer_addr);
             if sdcard_xfer_write = '1' then
-               wsector(sdcard_xfer_addr) := sdcard_xfer_in;
+               wsector(sdcard_xfer_addr) <= sdcard_xfer_in;
             end if;
 
             idle_filter <= idle_filter(filter_out_t'high-1 downto 0) & idle;
@@ -249,6 +249,7 @@ begin
    sdcard_sclk <= clk;
 
    process(clk, reset)
+      variable word: std_logic_vector(15 downto 0);
    begin
       if clk = '1' and clk'event then
          if enable = 1 then
@@ -489,7 +490,8 @@ begin
                         sdcard_mosi <= '1';
                      else
                         sdcard_mosi <= '0';
-                        sd_word <= wsector(sectorindex)(7 downto 0) & wsector(sectorindex)(15 downto 8);
+                        word := wsector(sectorindex);
+                        sd_word <= word(7 downto 0) & word(15 downto 8);
                         sectorindex <= sectorindex + 1;
                         sd_state <= sd_write;
                         counter <= 15;
@@ -500,7 +502,8 @@ begin
                      sd_word <= sd_word(14 downto 0) & '0';
                      counter <= counter - 1;
                      if counter = 0 then
-                        sd_word <= wsector(sectorindex)(7 downto 0) & wsector(sectorindex)(15 downto 8);
+                        word := wsector(sectorindex);
+                        sd_word <= word(7 downto 0) & word(15 downto 8);
                         if sectorindex = 255 then
                            sd_state <= sd_write_last;
                         end if;
@@ -564,7 +567,7 @@ begin
                   when sd_read_data =>
                      if counter = 0 then
                         counter <= 15;
-                        rsector(sectorindex) := sd_word(6 downto 0) & sdcard_miso & sd_word(14 downto 7);
+                        rsector(sectorindex) <= sd_word(6 downto 0) & sdcard_miso & sd_word(14 downto 7);
                         if sectorindex = 255 then
                            sd_state <= sd_read_crc;
                         else

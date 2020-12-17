@@ -613,6 +613,10 @@ begin
 
                end if;
 
+            else
+
+               tx <= '1';
+
             end if;
 
          end if;

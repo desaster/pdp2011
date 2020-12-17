@@ -41,7 +41,7 @@
 # ========================
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 11.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "00:17:06  AUGUST 26, 2011"
-set_global_assignment -name LAST_QUARTUS_VERSION "19.1.0 Lite Edition"
+set_global_assignment -name LAST_QUARTUS_VERSION "20.1.0 Lite Edition"
 
 # Pin & Location Assignments
 # ==========================
@@ -249,9 +249,22 @@ set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[2]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[1]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[0]
 
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to rx
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to cts
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to rx1
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to xu_miso
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to sdcard_miso
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to key0
+
 
 set_location_assignment PIN_T12 -to rx1
 set_location_assignment PIN_R11 -to tx1
+
+set_global_assignment -name VHDL_FILE ../mncaa.vhd
+set_global_assignment -name VHDL_FILE ../mncad.vhd
+set_global_assignment -name VHDL_FILE ../mncdi.vhd
+set_global_assignment -name VHDL_FILE ../mncdo.vhd
+set_global_assignment -name VHDL_FILE ../mnckw.vhd
 set_global_assignment -name SDC_FILE top.sdc
 set_global_assignment -name VHDL_FILE ../sdspi.vhd
 set_global_assignment -name VHDL_FILE ../m9312h47.vhd

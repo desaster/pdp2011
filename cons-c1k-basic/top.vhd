@@ -176,6 +176,38 @@ component unibus is
       dr11c_dxm : out std_logic;                                     -- data transmitted : dr11c_in data has been read by the cpu
       dr11c_init : out std_logic;                                    -- unibus reset propagated out to the user device
 
+-- minc-11
+
+      have_mncad : in integer range 0 to 1 := 0;                     -- mncad: a/d, max one card in a system
+      have_mnckw : in integer range 0 to 2 := 0;                     -- mnckw: clock, either one or two
+      have_mncaa : in integer range 0 to 1 := 0;                     -- mncaa: d/a
+      have_mncdi : in integer range 0 to 1 := 0;                     -- mncdo: digital in
+      have_mncdo : in integer range 0 to 1 := 0;                     -- mncdo: digital out
+      ad_start : out std_logic;                                      -- interface from mncad to a/d hardware : '1' signals to start converting
+      ad_done : in std_logic := '1';                                 -- interface from mncad to a/d hardware : '1' signals to the mncad that the a/d has completed a conversion
+      ad_channel : out std_logic_vector(5 downto 0);                 -- interface from mncad to a/d hardware : the channel number for the current command
+      ad_nxc : in std_logic := '1';                                  -- interface from mncad to a/d hardware : '1' signals to the mncad that the required channel does not exist
+      ad_sample : in std_logic_vector(11 downto 0) := "000000000000";-- interface from mncad to a/d hardware : the value of the last sample
+      kw_st1in : in std_logic := '0';                                -- mnckw0 st1 signal input, active on rising edge
+      kw_st2in : in std_logic := '0';                                -- mnckw0 st2 signal input, active on rising edge
+      kw_st1out : out std_logic;                                     -- mnckw0 st1 output pulse (actually : copy of the st1flag in the csr
+      kw_st2out : out std_logic;                                     -- mnckw0 st2 output pulse
+      kw_clkov : out std_logic;                                      -- mnckw0 clkovf output pulse
+      da_dac1 : out std_logic_vector(11 downto 0);
+      da_dac2 : out std_logic_vector(11 downto 0);
+      da_dac3 : out std_logic_vector(11 downto 0);
+      da_dac4 : out std_logic_vector(11 downto 0);
+      have_diloopback : in integer range 0 to 1 := 0;                -- set to 1 to loop back mncdo0 to mncdi0 internally for testing
+      di_dir : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi0 data input register
+      di_strobe : in std_logic := '0';
+      di_reply : out std_logic;
+      di_pgmout : out std_logic;
+      di_event : out std_logic;
+      do_dor : out std_logic_vector(15 downto 0);
+      do_hb_strobe : out std_logic;
+      do_lb_strobe : out std_logic;
+      do_reply : in std_logic := '0';
+
 -- cpu console, switches and display register
       have_csdr : in integer range 0 to 1 := 1;
 
@@ -311,27 +343,6 @@ signal rxrx : std_logic;
 signal txtx1 : std_logic;
 signal rxrx1 : std_logic;
 
-signal have_rl : integer range 0 to 1;
-signal rl_cs : std_logic;
-signal rl_mosi : std_logic;
-signal rl_miso : std_logic;
-signal rl_sclk : std_logic;
-signal rl_sddebug : std_logic_vector(3 downto 0);
-
-signal have_rk : integer range 0 to 1;
-signal rk_cs : std_logic;
-signal rk_mosi : std_logic;
-signal rk_miso : std_logic;
-signal rk_sclk : std_logic;
-signal rk_sddebug : std_logic_vector(3 downto 0);
-
-signal have_rh : integer range 0 to 1;
-signal rh_cs : std_logic;
-signal rh_mosi : std_logic;
-signal rh_miso : std_logic;
-signal rh_sclk : std_logic;
-signal rh_sddebug : std_logic_vector(3 downto 0);
-
 signal sddebug : std_logic_vector(3 downto 0);
 
 signal addr : std_logic_vector(21 downto 0);
@@ -433,30 +444,16 @@ begin
 --      kl1_force7bit => 1,
 
       have_kl11 => 1,
-      tx0 => txtx1,
-      rx0 => rxrx1,
-		kl0_force7bit => 1,
+      tx0 => txtx,
+      rx0 => rxrx,
+      kl0_force7bit => 1,
 
-      have_rl => have_rl,
-      rl_sdcard_cs => rl_cs,
-      rl_sdcard_mosi => rl_mosi,
-      rl_sdcard_sclk => rl_sclk,
-      rl_sdcard_miso => rl_miso,
-      rl_sdcard_debug => rl_sddebug,
-
-      have_rk => have_rk,
-      rk_sdcard_cs => rk_cs,
-      rk_sdcard_mosi => rk_mosi,
-      rk_sdcard_sclk => rk_sclk,
-      rk_sdcard_miso => rk_miso,
-      rk_sdcard_debug => rk_sddebug,
-
-      have_rh => have_rh,
-      rh_sdcard_cs => rh_cs,
-      rh_sdcard_mosi => rh_mosi,
-      rh_sdcard_sclk => rh_sclk,
-      rh_sdcard_miso => rh_miso,
-      rh_sdcard_debug => rh_sddebug,
+      have_rh => 1,
+      rh_sdcard_cs => sdcard_cs,
+      rh_sdcard_miso => sdcard_miso,
+      rh_sdcard_mosi => sdcard_mosi,
+      rh_sdcard_sclk => sdcard_sclk,
+      rh_sdcard_debug => sddebug,
 
       have_xu => 1,
       xu_cs => xu_cs,
@@ -477,7 +474,7 @@ begin
       cons_adss_cons => cons_adss_cons,
 
       cons_consphy => cons_consphy,
-		cons_progphy => cons_progphy,
+      cons_progphy => cons_progphy,
       cons_shfr => cons_shfr,
       cons_maddr => cons_maddr,
       cons_br => cons_br,
@@ -566,14 +563,6 @@ begin
    tx1 <= txtx1;
    rxrx1 <= rx1;
 
-   sddebug <= rh_sddebug when have_rh = 1 else rl_sddebug when have_rl = 1 else rk_sddebug;
-   sdcard_cs <= rh_cs when have_rh = 1 else rl_cs when have_rl = 1 else rk_cs;
-   sdcard_mosi <= rh_mosi when have_rh = 1 else rl_mosi when have_rl = 1 else rk_mosi;
-   sdcard_sclk <= rh_sclk when have_rh = 1 else rl_sclk when have_rl = 1 else rk_sclk;
-   rh_miso <= sdcard_miso;
-   rl_miso <= sdcard_miso;
-   rk_miso <= sdcard_miso;
-
    redled <= not rxrx1 & not txtx1 & not rxrx & not txtx & sddebug;
 
    dram_match <= '1' when addr(21 downto 18) /= "1111" else '0';
@@ -581,8 +570,6 @@ begin
    dram_cke <= '1';
    dram_clk <= c0;
    dram_addr13 <= '0';
-
-   have_rh <= 1; have_rl <= 0; have_rk <= 0;
 
    process(c0)
    begin

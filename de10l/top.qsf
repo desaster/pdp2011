@@ -42,7 +42,7 @@ set_global_assignment -name DEVICE 10M50DAF484C7G
 set_global_assignment -name TOP_LEVEL_ENTITY top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 16.1.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "21:26:56  JANUARY 17, 2017"
-set_global_assignment -name LAST_QUARTUS_VERSION "18.1.0 Lite Edition"
+set_global_assignment -name LAST_QUARTUS_VERSION "20.1.0 Lite Edition"
 set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name DEVICE_FILTER_PACKAGE FBGA
@@ -69,6 +69,10 @@ set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -rise
 set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -fall
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -rise
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -fall
+
+set_location_assignment PLL_1 -to "de10ladc:adc0|pll10mhz:adcpll|altpll:altpll_component"
+set_location_assignment PLL_1 -to "de10ladc:adc0|pll10mhz:adcpll|altpll:altpll_component|pll10mhz_altpll:auto_generated|wire_pll1_clk[0]"
+
 set_location_assignment PIN_B8 -to button0
 set_location_assignment PIN_A7 -to button1
 set_location_assignment PIN_P11 -to clkin
@@ -153,20 +157,6 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to dram_ldqm
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to dram_ras_n
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to dram_udqm
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to dram_we_n
-set_location_assignment PIN_AA1 -to vgar[0]
-set_location_assignment PIN_V1 -to vgar[1]
-set_location_assignment PIN_Y2 -to vgar[2]
-set_location_assignment PIN_Y1 -to vgar[3]
-set_location_assignment PIN_N3 -to vgah
-set_location_assignment PIN_W1 -to vgag[0]
-set_location_assignment PIN_T2 -to vgag[1]
-set_location_assignment PIN_R2 -to vgag[2]
-set_location_assignment PIN_R1 -to vgag[3]
-set_location_assignment PIN_P1 -to vgab[0]
-set_location_assignment PIN_T1 -to vgab[1]
-set_location_assignment PIN_P4 -to vgab[2]
-set_location_assignment PIN_N2 -to vgab[3]
-set_location_assignment PIN_N1 -to vgav
 set_location_assignment PIN_W10 -to tx
 set_location_assignment PIN_V10 -to rx
 set_location_assignment PIN_A8 -to redled[0]
@@ -211,20 +201,6 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to sw[3]
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to sw[2]
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to sw[1]
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to sw[0]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgab[3]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgab[2]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgab[1]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgab[0]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgag[3]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgag[2]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgag[1]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgag[0]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgah
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgar[3]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgar[2]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgar[1]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgar[0]
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to vgav
 set_location_assignment PIN_J20 -to sseg5[0]
 set_location_assignment PIN_K20 -to sseg5[1]
 set_location_assignment PIN_L18 -to sseg5[2]
@@ -319,12 +295,9 @@ set_location_assignment PIN_AB11 -to sdcard_mosi
 set_location_assignment PIN_Y11 -to sdcard_cs
 set_global_assignment -name FITTER_EFFORT "FAST FIT"
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rx1
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rx2
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to rx3
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to tx1
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to tx2
-set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to tx3
 set_location_assignment PIN_V9 -to rx1
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to rx1
 set_location_assignment PIN_W9 -to tx1
 set_location_assignment PIN_AA6 -to panel_col[11]
 set_location_assignment PIN_Y6 -to panel_col[10]
@@ -381,6 +354,20 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to panel_xled[3]
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to panel_xled[2]
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to panel_xled[1]
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to panel_xled[0]
+set_global_assignment -name ENABLE_SIGNALTAP OFF
+set_global_assignment -name USE_SIGNALTAP_FILE stp2.stp
+
+
+
+
+set_global_assignment -name VHDL_FILE ../mncdi.vhd
+set_global_assignment -name VHDL_FILE ../mncdo.vhd
+set_global_assignment -name VHDL_FILE de10ladc.vhd
+set_global_assignment -name QSYS_FILE m10adc.qsys
+set_global_assignment -name VHDL_FILE ../sdspi.vhd
+set_global_assignment -name VHDL_FILE ../mncaa.vhd
+set_global_assignment -name VHDL_FILE ../mncad.vhd
+set_global_assignment -name VHDL_FILE ../mnckw.vhd
 set_global_assignment -name VHDL_FILE ../m9312h47.vhd
 set_global_assignment -name VHDL_FILE ../m9312l47.vhd
 set_global_assignment -name VHDL_FILE ../panelos.vhd
@@ -412,7 +399,8 @@ set_global_assignment -name VHDL_FILE ../xubl.vhd
 set_global_assignment -name VHDL_FILE ../xubm.vhd
 set_global_assignment -name VHDL_FILE ../xubrt45.vhd
 set_global_assignment -name QIP_FILE pll.qip
-set_global_assignment -name ENABLE_SIGNALTAP OFF
-set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
 set_global_assignment -name SIGNALTAP_FILE stp1.stp
+set_global_assignment -name QIP_FILE pll10mhz.qip
+set_global_assignment -name SIGNALTAP_FILE stp2.stp
+
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
