@@ -1,6 +1,6 @@
-  
+
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.29 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -90,7 +90,6 @@ component unibus is
 
 -- rl controller
       have_rl : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rl_debug : in integer range 0 to 1 := 1;                  -- enable debug core
       rl_sdcard_cs : out std_logic;
       rl_sdcard_mosi : out std_logic;
       rl_sdcard_sclk : out std_logic;
@@ -99,9 +98,7 @@ component unibus is
 
 -- rk controller
       have_rk : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rk_debug : in integer range 0 to 2 := 1;                  -- enable debug core; 0=none; 1=all; 2=debug blinkenlights only
       have_rk_num : in integer range 1 to 8 := 8;                    -- active number of drives on the controller; set to < 8 to save core
-      have_rk_minimal : in integer range 0 to 1 := 0;                -- 1 for smaller core, but not very compatible controller. Useful to fit s3b200 only
       rk_sdcard_cs : out std_logic;
       rk_sdcard_mosi : out std_logic;
       rk_sdcard_sclk : out std_logic;
@@ -110,12 +107,12 @@ component unibus is
 
 -- rh controller
       have_rh : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rh_debug : in integer range 0 to 1 := 1;                  -- enable debug core
       rh_sdcard_cs : out std_logic;
       rh_sdcard_mosi : out std_logic;
       rh_sdcard_sclk : out std_logic;
       rh_sdcard_miso : in std_logic := '0';
       rh_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
+      rh_type : in integer range 4 to 7 := 6;
 
 -- xu enc424j600 controller interface
       have_xu : in integer range 0 to 1 := 0;                        -- enable conditional compilation
@@ -273,8 +270,12 @@ component paneldriver is
       cons_map18 : in std_logic;
       cons_map22 : in std_logic;
 
-      sample_cycles : in std_logic_vector(15 downto 0) := x"0400";
-      minon_cycles : in std_logic_vector(15 downto 0) := x"0400";
+      sample_cycles : in std_logic_vector(15 downto 0) := x"0100";   -- a sample is this many runs of the panel state machine (which has 16 cycles, so multiply by that)
+      minon_cycles : in std_logic_vector(15 downto 0) := x"0100";    -- if a signal has been on for this many cycles in a sample, then the corresponding output will be on - note 16, above.
+
+      paneltype : in integer range 0 to 3 := 0;                      -- 0 - no console; 1 - PiDP11, regular; 2 - PiDP11, widdershins; 3 - PDP2011 nanocons
+
+      cons_reset : out std_logic;                                    -- a request for a reset from the console
 
       clkin : in std_logic;
       reset : in std_logic
@@ -309,6 +310,7 @@ signal cpureset : std_logic := '1';
 signal cpuresetlength : integer range 0 to 63 := 63;
 
 signal ifetch: std_logic;
+signal cpu_addr_v : std_logic_vector(15 downto 0);
 signal txtx : std_logic;
 signal rxrx : std_logic;
 signal txtx1 : std_logic;
@@ -376,6 +378,8 @@ signal cons_map16 : std_logic;
 signal cons_map18 : std_logic;
 signal cons_map22 : std_logic;
 
+signal cons_reset : std_logic;
+
 signal sample_cycles : std_logic_vector(15 downto 0) := x"0400";
 signal minon_cycles : std_logic_vector(15 downto 0) := x"0400";
 
@@ -413,12 +417,12 @@ signal dram_fsm : dram_fsm_type := dram_init;
 
 begin
 
---   issp0: issp port map(
---      source => sample_cycles
---   );
---   issp1: issplim port map(
---      source => minon_cycles
---   );
+--  issp0: issp port map(
+--     source => sample_cycles
+--  );
+--  issp1: issplim port map(
+--     source => minon_cycles
+--  );
 
    pll0: pll port map(
       inclk0 => clkin,
@@ -445,7 +449,6 @@ begin
       kl1_force7bit => 1,
 
       have_rl => have_rl,
-      have_rl_debug => 1,
       rl_sdcard_cs => rl_cs,
       rl_sdcard_mosi => rl_mosi,
       rl_sdcard_sclk => rl_sclk,
@@ -453,7 +456,6 @@ begin
       rl_sdcard_debug => rl_sddebug,
 
       have_rk => have_rk,
-      have_rk_debug => 1,
       rk_sdcard_cs => rk_cs,
       rk_sdcard_mosi => rk_mosi,
       rk_sdcard_sclk => rk_sclk,
@@ -461,7 +463,6 @@ begin
       rk_sdcard_debug => rk_sddebug,
 
       have_rh => have_rh,
-      have_rh_debug => 1,
       rh_sdcard_cs => rh_cs,
       rh_sdcard_mosi => rh_mosi,
       rh_sdcard_sclk => rh_sclk,
@@ -516,6 +517,7 @@ begin
       addr_match => dram_match,
 
       ifetch => ifetch,
+		cpu_addr_v => cpu_addr_v,
       reset => cpureset,
       clk50mhz => clkin,
       clk => cpuclk
@@ -558,14 +560,18 @@ begin
       cons_map18 => cons_map18,
       cons_map22 => cons_map22,
 
+      cons_reset => cons_reset,
+
       sample_cycles => sample_cycles,
       minon_cycles => minon_cycles,
+
+		paneltype => 3,
 
       clkin => cpuclk,
       reset => reset
    );
 
-   reset <= (not key0) ; -- or power_on_reset;
+   reset <= (not key0);
 
    tx <= txtx;
 	rxrx <= rx;
@@ -582,13 +588,14 @@ begin
 
    greenled <= ifetch & not rxrx & not rxrx1 & not txtx1 & sddebug;
 
+--   dram_match <= '1' when addr(21 downto 13) /= "111111111" else '0';
    dram_match <= '1' when addr(21 downto 18) /= "1111" else '0';
    dram_cke <= '1';
    dram_clk <= c0;
 
-   have_rh <= 1; have_rl <= 0; have_rk <= 0;
+   have_rh <= 0; have_rl <= 1; have_rk <= 0;
 
-   process(c0)
+   process(c0, reset)
    begin
       if c0='1' and c0'event then
 
@@ -753,6 +760,10 @@ begin
                      cpureset <= '0';
                   else
                      cpuresetlength <= cpuresetlength - 1;
+                  end if;
+                  if cons_reset = '1' then
+                     cpuresetlength <= 63;
+                     cpureset <= '1';
                   end if;
 
                cpuclk <= '1';

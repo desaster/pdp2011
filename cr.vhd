@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.27 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -342,7 +342,8 @@ begin
                      if modelcode = 70
                      then
                         if bus_control_dati = '1' then
-                           bus_dati <= "0111111111111111";           -- FIXME should have real system size, obviously. 077777 means 2M
+--                           bus_dati <= "0111111111111111";           -- 077777 means 1024Kwords
+                           bus_dati <= "1110111111111111";           -- 167777 means 1920Kwords
    --                                   1098765432109876
                         end if;
                      else

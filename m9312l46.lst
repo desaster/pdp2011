@@ -9,7 +9,7 @@
        9                                ;
       10                                ; This console/diagnostic PROM is for 11/04-34-etc CPUs, but works in every 11.
       11                                ;
-      12                                ; $Revision: 1.6 $
+      12                                ; $Revision$
       13                                
       14 177560                         dlbase   =177560              ; console DL11 base
       15 177560                         dlrcsr   =dlbase+0            ; console RX status

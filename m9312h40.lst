@@ -1,6 +1,6 @@
        1                                         .title m9312h40 - standalone high rom - minimal boot rk
        2                                ;--
-       3                                ;-- Copyright (c) 2008-2019 Sytse van Slooten
+       3                                ;-- Copyright (c) 2008-2020 Sytse van Slooten
        4                                ;--
        5                                ;-- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
        6                                ;-- other language source files and associated documentation files ("the materials") to use

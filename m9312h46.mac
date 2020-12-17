@@ -3,7 +3,7 @@
 ;
 ; copied from http://ak6dn.dyndns.org/PDP-11/M9312/ and modified to fit in a single source
 ;
-; $Revision: 1.5 $
+; $Revision$
 
 rlcsr     =174400             ; std RL11 csrbase
 

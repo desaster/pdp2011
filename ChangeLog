@@ -1,19 +1,61 @@
 
+7/11
+- lowering the clock on c1k to 140Mhz, 168 works with reduced configurations
+  but not with the full 11/70+fpu+rp+xu, it seems. Maybe with the right
+  fitter options.
+  
 
-6/24
-- tried to get rk core converted quickly - that hasn't worked. Need to get
-  back to it after the summer break.
-- finishing up the rh, integrating the branch that I've been working on back
-  into the main branch.
-- wondering about the core usage of old vs new:
-      rh11: lcc   lcr   mem
-      old: 1158   384     0
-      new  1441   522    8K
-  so yes, the new core is 'a bit' bigger than the old. Probably not too much
-  of a surprise, since it takes the extra step of storing everything in the
-  2x4K buffers in between things.
-  definitely not a showstopper though - the reduced bus hogging and hc/xd support
-  are more than worth it.
+2020/7/9
+- reorganizing the rk11 work into the main branch
+- found some issues in sdspi - like, the bootstraps resetting the
+  core while it is still initializing. Seem to have fixed that.
+- added some more configuration stuff to make sure the sdspi
+  and rh/rk cores don't take up space when they're not configured.
+- reworked the rk11 work into the rh11 core. Tests are running.
+
+
+7/8
+- done some more work on the sdhc rk. Passes most tests now, including
+  strange cases with formatting and inhibit-bus-address. Interestingly
+  also discovered some errors or suspect situations in the stuff copied
+  from rh - will make it somewhat more generic, then backport it.
+
+
+7/7
+- done a quick job on the sdhc rk. Unfortunately I did that on the
+  branch meant for working on the rh. Oh well. Seems to work fine
+  with RT-11 (mubas, sysgen, dungeo) and DOS/11. And passes some
+  tests - although not all yet.
+
+
+04/21
+- started new branch on git for the work to add multiple disk
+  capability to the rh controller.
+
+
+2020/4/20
+- after several other projects, finally returned to finishing
+  the November/December improvements on the SDHC RH. Found
+  an off-by-one mistake in the write logic, that appears
+  to have been it. Also fixed several minor omissions. Next
+  up should be rp07 and multiple disk support.
+
+
+10/29
+- before going into some other work on the de270 test setup... had a look
+  at the dos/11 stuff again. The 9/14 fix was good for dos v10, but not dos
+  v9 - that still fails, and that is the version that Scott is working with.
+  Anyway, played some with the parameters, now it seems to work. Sending off
+  to Scott to verify.
+
+
+12/26
+- several changes to the rh core and new sdspi, not all of
+  that was quite stable yet as it turned out. Not finished
+  yet either, but it does start to pass more of the old
+  maindecs. Aiming for a functionally complete controller
+  too, so that the individual components can be more easily
+  ported to the other disk types.
 
 
 6/12

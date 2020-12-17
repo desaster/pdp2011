@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.94 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -37,7 +37,6 @@ entity unibus is
 
 -- rl controller
       have_rl : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rl_debug : in integer range 0 to 1 := 1;                  -- enable debug core
       rl_sdcard_cs : out std_logic;
       rl_sdcard_mosi : out std_logic;
       rl_sdcard_sclk : out std_logic;
@@ -46,9 +45,7 @@ entity unibus is
 
 -- rk controller
       have_rk : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rk_debug : in integer range 0 to 2 := 1;                  -- enable debug core; 0=none; 1=all; 2=debug blinkenlights only
       have_rk_num : in integer range 1 to 8 := 8;                    -- active number of drives on the controller; set to < 8 to save core
-      have_rk_minimal : in integer range 0 to 1 := 0;                -- 1 for smaller core, but not very compatible controller. Useful to fit s3b200 only
       rk_sdcard_cs : out std_logic;
       rk_sdcard_mosi : out std_logic;
       rk_sdcard_sclk : out std_logic;
@@ -57,12 +54,12 @@ entity unibus is
 
 -- rh controller
       have_rh : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rh_debug : in integer range 0 to 1 := 1;                  -- enable debug core
       rh_sdcard_cs : out std_logic;
       rh_sdcard_mosi : out std_logic;
       rh_sdcard_sclk : out std_logic;
       rh_sdcard_miso : in std_logic := '0';
       rh_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
+      rh_type : in integer range 4 to 7 := 6;
 
 -- xu enc424j600 controller interface
       have_xu : in integer range 0 to 1 := 0;                        -- enable conditional compilation
@@ -529,9 +526,9 @@ component rl11 is
       sdcard_debug : out std_logic_vector(3 downto 0);
 
       have_rl : in integer range 0 to 1;
-      have_rl_debug : in integer range 0 to 1;
       reset : in std_logic;
-      sdclock : in std_logic;
+      clk50mhz : in std_logic;
+      nclk : in std_logic;
       clk : in std_logic
    );
 end component;
@@ -570,11 +567,10 @@ component rk11 is
       sdcard_debug : out std_logic_vector(3 downto 0);
 
       have_rk : in integer range 0 to 1;
-      have_rk_debug : in integer range 0 to 2;
       have_rk_num : in integer range 1 to 8;
-      have_rk_minimal : in integer range 0 to 1;
       reset : in std_logic;
-      sdclock : in std_logic;
+      clk50mhz : in std_logic;
+      nclk : in std_logic;
       clk : in std_logic
    );
 end component;
@@ -621,7 +617,7 @@ component rh11 is
 
       have_rh : in integer range 0 to 1 := 0;
       have_rh70 : in integer range 0 to 1 := 0;
-      rmtype : in integer range 4 to 7 := 6;
+      rh_type : in integer range 4 to 7 := 6;
       reset : in std_logic;
       clk50mhz : in std_logic;
       nclk : in std_logic;
@@ -1376,12 +1372,11 @@ begin
       sdcard_miso => rl_sdcard_miso,
       sdcard_debug => rl_sdcard_debug,
 
-      sdclock => clk,
-
       have_rl => have_rl,
-      have_rl_debug => have_rl_debug,
       reset => cpu_init,
-      clk => nclk
+      clk50mhz => clk50mhz,
+      nclk => nclk,
+      clk => clk
    );
 
    rk0: rk11 port map(
@@ -1416,14 +1411,12 @@ begin
       sdcard_miso => rk_sdcard_miso,
       sdcard_debug => rk_sdcard_debug,
 
-      sdclock => clk,
-
       have_rk => have_rk,
-      have_rk_debug => have_rk_debug,
       have_rk_num => have_rk_num,
-      have_rk_minimal => have_rk_minimal,
       reset => cpu_init,
-      clk => nclk
+      clk50mhz => clk50mhz,
+      nclk => nclk,
+      clk => clk
    );
 
    rh70_bus_master_nxm <= '1' when addr_match = '0' and cpu_npg = '1' and rh0_npr = '1' and have_rh70 = 1 else '0';
@@ -1465,6 +1458,8 @@ begin
       sdcard_sclk => rh_sdcard_sclk,
       sdcard_miso => rh_sdcard_miso,
       sdcard_debug => rh_sdcard_debug,
+
+      rh_type => rh_type,
 
       have_rh => have_rh,
       have_rh70 => have_rh70,

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2019 Sytse van Slooten
+-- Copyright (c) 2008-2020 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -12,7 +12,7 @@
 -- without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 --
 
--- $Revision: 1.60 $
+-- $Revision$
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -53,16 +53,47 @@ entity rk11 is
       sdcard_debug : out std_logic_vector(3 downto 0);
 
       have_rk : in integer range 0 to 1;
-      have_rk_debug : in integer range 0 to 2;
       have_rk_num : in integer range 1 to 8;
-      have_rk_minimal : in integer range 0 to 1;
       reset : in std_logic;
-      sdclock : in std_logic;
+      clk50mhz : in std_logic;
+      nclk : in std_logic;
       clk : in std_logic
    );
 end rk11;
 
 architecture implementation of rk11 is
+
+component sdspi is
+   port(
+      sdcard_cs : out std_logic;
+      sdcard_mosi : out std_logic;
+      sdcard_sclk : out std_logic;
+      sdcard_miso : in std_logic := '0';
+      sdcard_debug : out std_logic_vector(3 downto 0);
+
+      sdcard_addr : in std_logic_vector(22 downto 0);
+
+      sdcard_idle : out std_logic;
+      sdcard_read_start : in std_logic;
+      sdcard_read_ack : in std_logic;
+      sdcard_read_done : out std_logic;
+      sdcard_write_start : in std_logic;
+      sdcard_write_ack : in std_logic;
+      sdcard_write_done : out std_logic;
+      sdcard_error : out std_logic;
+
+      sdcard_xfer_addr : in integer range 0 to 255;
+      sdcard_xfer_read : in std_logic;
+      sdcard_xfer_out : out std_logic_vector(15 downto 0);
+      sdcard_xfer_write : in std_logic;
+      sdcard_xfer_in : in std_logic_vector(15 downto 0);
+
+      enable : in integer range 0 to 1 := 0;
+      controller_clk : in std_logic;
+      reset : in std_logic;
+      clk50mhz : in std_logic
+   );
+end component;
 
 
 -- regular bus interface
@@ -89,6 +120,7 @@ signal rkds_rwsrdy : std_logic;                            -- read/write/seek re
 signal rkds_wps : std_logic;                               -- write protected if 1
 signal rkds_scsa : std_logic;                              -- disk address = sector counter
 signal rkds_sc : std_logic_vector(3 downto 0);             -- sector counter
+signal rkds : std_logic_vector(15 downto 0);
 
 -- rk11 registers - rker - 777402
 
@@ -105,6 +137,7 @@ signal rker_ske : std_logic;                               -- seek error
 signal rker_wlo : std_logic;                               -- write lockout
 signal rker_ovr : std_logic;                               -- overrun
 signal rker_dre : std_logic;                               -- drive error
+signal rker : std_logic_vector(15 downto 0);
 
 -- rk11 registers - rkcs - 777404
 
@@ -120,6 +153,7 @@ signal rkcs_ide : std_logic;                               -- interrupt on done 
 signal rkcs_mex : std_logic_vector(1 downto 0);            -- bit 18, 17 of address
 signal rkcs_fu : std_logic_vector(2 downto 0);             -- function code
 signal rkcs_go : std_logic;                                -- go
+signal rkcs : std_logic_vector(15 downto 0);
 
 -- rk11 registers - rkwc - 777406
 
@@ -135,6 +169,7 @@ signal rkda_dr : std_logic_vector(2 downto 0);
 signal rkda_cy : std_logic_vector(7 downto 0);
 signal rkda_hd : std_logic;
 signal rkda_sc : std_logic_vector(3 downto 0);
+signal rkda : std_logic_vector(15 downto 0);
 
 -- rk11 registers - rkdb - 777416
 
@@ -144,72 +179,15 @@ signal rkdb : std_logic_vector(15 downto 0);
 -- others
 
 signal start : std_logic;
-signal start_read : std_logic;
-signal start_write : std_logic;
 signal update_rkwc : std_logic;
 signal wcp : std_logic_vector(15 downto 0);            -- word count, positive
-signal wrkdb : std_logic_vector(15 downto 0);          -- written by sdcard state machine, copied whenever a command finishes
 
 
--- sd card interface
-
-signal sdclock_enable : std_logic;
-
-type sd_states is (
-   sd_reset,
-   sd_clk1,
-   sd_clk2,
-   sd_cmd0,
-   sd_cmd1,
-   sd_cmd1_checkresponse,
-   sd_error_nxm,
-   sd_error,
-   sd_error_recover,
-   sd_send_cmd,
-   sd_send_cmd_noresponse,
-   sd_set_block_length,
-   sd_set_block_length_checkresponse,
-   sd_read,
-   sd_readfmt,
-   sd_readfmt2,
-   sd_read_checkresponse,
-   sd_read_data_waitstart,
-   sd_read_data,
-   sd_read_rest,
-   sd_read_done,
-   sd_readr1,
-   sd_readr1wait,
-   sd_write,
-   sd_write_checkresponse,
-   sd_write_data_waitstart,
-   sd_write_data_startblock,
-   sd_write_data,
-   sd_write_rest,
-   sd_write_crc,
-   sd_write_readcardresponse,
-   sd_write_waitcardready,
-   sd_write_done,
-   sd_wait,
-   sd_idle
-);
-
-signal sd_state : sd_states := sd_reset;
-signal sd_nextstate : sd_states := sd_reset;
-
-signal counter : integer range 0 to 255;
-signal blockcounter : integer range 0 to 256;                   -- counter within sd card block
-signal sectorcounter : std_logic_vector(8 downto 0);            -- counter within rk11 sector
-
-signal sd_cmd : std_logic_vector(47 downto 0);
-signal sd_r1 : std_logic_vector(6 downto 0);                    -- r1 response token from card
-signal sd_dr : std_logic_vector(3 downto 0);                    -- data response token from card
-
-signal sd_temp : std_logic_vector(15 downto 0);
 
 signal hs_offset : std_logic_vector(16 downto 0);
 signal ca_offset : std_logic_vector(16 downto 0);
 signal dn_offset : std_logic_vector(16 downto 0);
-signal sd_addr : std_logic_vector(16 downto 0);
+signal sd_addr : std_logic_vector(22 downto 0);
 
 signal work_bar : std_logic_vector(17 downto 1);
 
@@ -219,7 +197,83 @@ type rksi_t is array(7 downto 0) of rksi_st;
 signal rksi : rksi_t;
 signal scpset : std_logic;
 
+signal rkdelay : integer range 0 to 240000;
+signal rkcs_godelay : integer range 0 to 10000;
+
+signal write_start : std_logic;
+signal wrkdb : std_logic_vector(15 downto 0);
+
+-- sdspi interface signals
+
+signal sdcard_xfer_clk : std_logic;
+signal sdcard_xfer_addr : integer range 0 to 255;
+signal sdcard_xfer_read : std_logic;
+signal sdcard_xfer_out : std_logic_vector(15 downto 0);
+signal sdcard_xfer_write : std_logic;
+signal sdcard_xfer_in : std_logic_vector(15 downto 0);
+
+signal sdcard_idle : std_logic;
+signal sdcard_read_start : std_logic;
+signal sdcard_read_ack : std_logic;
+signal sdcard_read_done : std_logic;
+signal sdcard_write_start : std_logic;
+signal sdcard_write_ack : std_logic;
+signal sdcard_write_done : std_logic;
+signal sdcard_error : std_logic;
+
+-- busmaster controller
+
+signal nxm : std_logic;
+signal sectorcounter : std_logic_vector(8 downto 0);            -- counter within sector
+
+
+type busmaster_state_t is (
+   busmaster_idle,
+   busmaster_read,
+   busmaster_readh,
+   busmaster_readh2,
+   busmaster_read1,
+   busmaster_read_done,
+   busmaster_write1,
+   busmaster_write,
+   busmaster_writen,
+   busmaster_write_wait,
+   busmaster_write_done,
+   busmaster_wait
+);
+signal busmaster_state : busmaster_state_t := busmaster_idle;
+
 begin
+
+   sd1: sdspi port map(
+      sdcard_cs => sdcard_cs,
+      sdcard_mosi => sdcard_mosi,
+      sdcard_sclk => sdcard_sclk,
+      sdcard_miso => sdcard_miso,
+      sdcard_debug => sdcard_debug,
+
+      sdcard_addr => sd_addr,
+
+      sdcard_idle => sdcard_idle,
+      sdcard_read_start => sdcard_read_start,
+      sdcard_read_ack => sdcard_read_ack,
+      sdcard_read_done => sdcard_read_done,
+      sdcard_write_start => sdcard_write_start,
+      sdcard_write_ack => sdcard_write_ack,
+      sdcard_write_done => sdcard_write_done,
+      sdcard_error => sdcard_error,
+
+      sdcard_xfer_addr => sdcard_xfer_addr,
+      sdcard_xfer_read => sdcard_xfer_read,
+      sdcard_xfer_out => sdcard_xfer_out,
+      sdcard_xfer_in => sdcard_xfer_in,
+      sdcard_xfer_write => sdcard_xfer_write,
+
+      enable => have_rk,
+      controller_clk => clk,
+      reset => reset,
+      clk50mhz => clk50mhz
+   );
 
 
 -- regular bus interface
@@ -229,6 +283,11 @@ begin
 
 
 -- specific logic for the device
+
+   rkcs <= rkcs_err & rkcs_he & rkcs_scp & '0' & rkcs_iba & rkcs_fmt & rkcs_exb & rkcs_sse & rkcs_rdy & rkcs_ide & rkcs_mex & rkcs_fu & rkcs_go;
+   rkds <= rkds_dri & rkds_dpl & rkds_rk05 & rkds_dru & rkds_sin & rkds_sok & rkds_dry & rkds_rwsrdy & rkds_wps & rkds_scsa & rkds_sc;
+   rkda <= rkda_dr & rkda_cy & rkda_hd & rkda_sc;
+   rker <= rker_dre & rker_ovr & rker_wlo & rker_ske & rker_pge & rker_nxm & rker_dlt & rker_te & rker_nxd & rker_nxc & rker_nxs & "000" & rker_cse & rker_wce;
 
    rkcs_err <= '1' when
       rker_wce = '1'
@@ -260,15 +319,15 @@ begin
       or rker_dre = '1'
       else '0';
 
-   rkds_rwsrdy <= '1' when conv_integer(rkda_dr) < have_rk_num and rksi(conv_integer(rkda_dr)) = 0 and sd_state = sd_idle
+   rkds_rwsrdy <= '1' when conv_integer(rkda_dr) < have_rk_num and rksi(conv_integer(rkda_dr)) = 0 and sdcard_idle = '1'
       else '0';
    rkds_dry <= '1' when conv_integer(rkda_dr) < have_rk_num else '0';
 
 -- regular bus interface : handle register contents and dependent logic
 
-   process(clk, reset)
+   process(nclk, reset)
    begin
-      if clk = '1' and clk'event then
+      if nclk = '1' and nclk'event then
          if reset = '1' then
 
             br <= '0';
@@ -331,15 +390,14 @@ begin
             rkdb <= (others => '0');
 
             start <= '0';
-            start_read <= '0';
-            start_write <= '0';
-
-            npr <= '0';
 
             rkwc <= (others => '0');
             update_rkwc <= '1';
 
             rkclock <= 0;
+
+            rkdelay <= 0;
+            rkcs_godelay <= 30;
 
          else
 
@@ -387,19 +445,16 @@ begin
 
                end case;
             else
-               npr <= '0';
                br <= '0';
             end if;
 
             if have_rk = 1 then
                rkclock <= rkclock + 1;
                if rkclock = 0 then
-                  if have_rk_minimal = 0 then
-                     if rkds_sc(3 downto 0) = "1011" then
-                        rkds_sc <= "0000";
-                     else
-                        rkds_sc <= rkds_sc + "0001";
-                     end if;
+                  if rkds_sc(3 downto 0) = "1011" then
+                     rkds_sc <= "0000";
+                  else
+                     rkds_sc <= rkds_sc + "0001";
                   end if;
 
                   if have_rk_num = 8 and rksi(7) > 1 then
@@ -428,28 +483,23 @@ begin
                   end if;
                end if;
 
-               if have_rk_minimal = 0 then
-                  if rkds_sc = rkda_sc then
-                     rkds_scsa <= '1';
-                  else
-                     rkds_scsa <= '0';
-                  end if;
-               else
-                  rkds_sc <= rkda_sc;
+               if rkds_sc = rkda_sc then
                   rkds_scsa <= '1';
+               else
+                  rkds_scsa <= '0';
                end if;
 
                if base_addr_match = '1' and bus_control_dati = '1' then
 
                   case bus_addr(3 downto 1) is
                      when "000" =>
-                        bus_dati <= rkds_dri & rkds_dpl & rkds_rk05 & rkds_dru & rkds_sin & rkds_sok & rkds_dry & rkds_rwsrdy & rkds_wps & rkds_scsa & rkds_sc;
+                        bus_dati <= rkds;
 
                      when "001" =>
-                        bus_dati <= rker_dre & rker_ovr & rker_wlo & rker_ske & rker_pge & rker_nxm & rker_dlt & rker_te & rker_nxd & rker_nxc & rker_nxs & "000" & rker_cse & rker_wce;
+                        bus_dati <= rker;
 
                      when "010" =>
-                        bus_dati <= rkcs_err & rkcs_he & rkcs_scp & '0' & rkcs_iba & rkcs_fmt & rkcs_exb & rkcs_sse & rkcs_rdy & rkcs_ide & rkcs_mex & rkcs_fu & rkcs_go;
+                        bus_dati <= rkcs;
 
                      when "011" =>
                         bus_dati <= (not wcp) + 1;
@@ -458,14 +508,10 @@ begin
                         bus_dati <= rkba;
 
                      when "101" =>
-                        bus_dati <= rkda_dr & rkda_cy & rkda_hd & rkda_sc;
+                        bus_dati <= rkda;
 
                      when "111" =>
-                        if have_rk_minimal = 0 then
-                           bus_dati <= rkdb;
-                        else
-                           bus_dati <= (others => '0');
-                        end if;
+                        bus_dati <= rkdb;
 
                      when others =>
                         bus_dati <= (others => '0');
@@ -482,10 +528,13 @@ begin
                         when "001" =>
                         when "010" =>
                            rkcs_go <= bus_dato(0);
+                           if bus_dato(0) = '1' then
+                              rkcs_rdy <= '0';
+                           end if;
                            rkcs_fu <= bus_dato(3 downto 1);
                            rkcs_mex <= bus_dato(5 downto 4);
                            rkcs_ide <= bus_dato(6);
-                           if bus_dato(6) = '1' and bus_dato(0) = '0' and bus_dato(7) = '1' then
+                           if bus_dato(6) = '1' and bus_dato(0) = '0' and rkcs_rdy = '1' then
                               interrupt_trigger <= '1';                    -- setting ide, not setting go, but rdy = 1 -> interrupt
                            end if;
 
@@ -513,12 +562,10 @@ begin
                         when "000" =>
                         when "001" =>
                         when "010" =>
-                           if have_rk_minimal = 0 then
-                              rkcs_sse <= bus_dato(8);
-                              rkcs_exb <= bus_dato(9);
-                              rkcs_fmt <= bus_dato(10);
-                              rkcs_iba <= bus_dato(11);
-                           end if;
+                           rkcs_sse <= bus_dato(8);
+                           rkcs_exb <= bus_dato(9);
+                           rkcs_fmt <= bus_dato(10);
+                           rkcs_iba <= bus_dato(11);
 
                         when "011" =>
                            rkwc(15 downto 8) <= bus_dato(15 downto 8);
@@ -545,13 +592,20 @@ begin
                end if;
 
                if rkcs_go = '1' and start = '0' then
-                  rkcs_rdy <= '0';
-                  rkcs_go <= '0';
+--                  rkcs_rdy <= '0';
+                  rksi(conv_integer(rkda_dr)) <= 3;
+                  if rkcs_godelay = 0 then
+                     rkcs_go <= '0';
+                     rkcs_godelay <= 180;
+                  else
+                     rkcs_godelay <= rkcs_godelay - 1;
+                  end if;
                end if;
 
-               if rkcs_rdy = '0' and start = '0' then
+               if rkcs_rdy = '0' and start = '0' and rkcs_go = '0' then
                   if conv_integer(rkda_dr) < have_rk_num then
                      start <= '1';
+                     rkdelay <= 120;
                      rkcs_scp <= '0';
                      rkds_dri <= "000";                                    -- drive ident of interrupting drive
                   else
@@ -603,235 +657,228 @@ begin
 
 
                      when "001" =>                                  -- write
-                        npr <= '1';
-                        rksi(conv_integer(rkda_dr)) <= 0;
-                        if npg = '1' then
-                           if sd_state = sd_idle and start_write = '0' then
+                        if rkdelay /= 0 then
+                           rkdelay <= rkdelay - 1;
+                        else
+                           rksi(conv_integer(rkda_dr)) <= 0;
+                           if sdcard_idle = '1' and write_start = '0' then
                               if unsigned(rkda_cy) > unsigned'("11001010") then      -- o"000" thru "o"312"
                                  rker_nxc <= '1';
                                  rkcs_rdy <= '1';
-                                 if have_rk_minimal = 0 then
-                                    rkdb <= wrkdb;
-                                 end if;
-                                 npr <= '0';
+                                 rkdb <= wrkdb;
                                  start <= '0';
                               elsif rkda_sc(3 downto 2) = "11" then
                                  rker_nxs <= '1';
                                  rkcs_rdy <= '1';
-                                 if have_rk_minimal = 0 then
-                                    rkdb <= wrkdb;
-                                 end if;
-                                 npr <= '0';
+                                 rkdb <= wrkdb;
                                  start <= '0';
                               else
-                                 start_write <= '1';
+                                 write_start <= '1';
                               end if;
-                           elsif sd_state = sd_write_done and start_write = '1' then
-                              rkcs_mex <= work_bar(17 downto 16);
-                              rkba <= work_bar(15 downto 1) & '0';
-                              if unsigned(rkda_sc(3 downto 0)) < unsigned'("1011") then             -- don't increment beyond 047=39.
-                                 rkda_sc(3 downto 0) <= rkda_sc(3 downto 0) + 1;
-                              else
-                                 rkda_sc(3 downto 0) <= "0000";
-                                 if rkda_hd = '0' then
-                                    rkda_hd <= '1';
+                           elsif sdcard_write_ack = '1' and sdcard_write_done = '0' and write_start = '1' then
+                              write_start <= '0';
+
+                              if nxm = '0' and sdcard_error = '0' then
+                                 rkcs_mex <= work_bar(17 downto 16);
+                                 rkba <= work_bar(15 downto 1) & '0';
+                                 if unsigned(rkda_sc(3 downto 0)) < unsigned'("1011") then             -- don't increment beyond 047=39.
+                                    rkda_sc(3 downto 0) <= rkda_sc(3 downto 0) + 1;
                                  else
-                                    if unsigned(rkda_cy) = unsigned'("11001010") and rkcs_fmt /= '1' and unsigned(wcp) > unsigned'("0000000100000000") then      -- o"000" thru "o"312"
-                                       rker_ovr <= '1';
-                                       rkcs_rdy <= '1';
-                                       if have_rk_minimal = 0 then
-                                          rkdb <= wrkdb;
-                                       end if;
-                                       npr <= '0';
-                                       start <= '0';
+                                    rkda_sc(3 downto 0) <= "0000";
+                                    if rkda_hd = '0' then
+                                       rkda_hd <= '1';
                                     else
-                                       rkda_cy <= rkda_cy + 1;
-                                       rkda_hd <= '0';
+                                       if unsigned(rkda_cy) = unsigned'("11001010") and rkcs_fmt /= '1' and unsigned(wcp) > unsigned'("0000000100000000") then      -- o"000" thru "o"312"
+                                          rker_ovr <= '1';
+                                          rkcs_rdy <= '1';
+                                          rkdb <= wrkdb;
+                                          start <= '0';
+                                       else
+                                          rkda_cy <= rkda_cy + 1;
+                                          rkda_hd <= '0';
+                                       end if;
                                     end if;
                                  end if;
-                              end if;
 
-                              if unsigned(wcp) > unsigned'("0000000100000000") then               -- check if we need to do another sector, and setup for the next round if so
-                                 wcp <= unsigned(wcp) - unsigned'("0000000100000000");
-                              else
-                                 wcp <= (others => '0');
-                                 npr <= '0';
-                                 start <= '0';
-                                 rkcs_rdy <= '1';
-                                 if have_rk_minimal = 0 then
+                                 if unsigned(wcp) > unsigned'("0000000100000000") then               -- check if we need to do another sector, and setup for the next round if so
+                                    wcp <= unsigned(wcp) - unsigned'("0000000100000000");
+                                 else
+                                    wcp <= (others => '0');
+                                    start <= '0';
+                                    rkcs_rdy <= '1';
                                     rkdb <= wrkdb;
                                  end if;
-                              end if;
-                              start_write <= '0';
 
-                           elsif sd_state = sd_error_nxm and have_rk_minimal = 0 then
-                              rkcs_mex <= work_bar(17 downto 16);
-                              rkba <= work_bar(15 downto 1) & '0';
-                              npr <= '0';
-                              start <= '0';
-                              rker_nxm <= '1';
-                              rkcs_rdy <= '1';
-                              if have_rk_minimal = 0 then
-                                 rkdb <= wrkdb;
-                              end if;
-                              start_write <= '0';
+                              else
 
-                           elsif sd_state = sd_error then
-                              rkcs_mex <= work_bar(17 downto 16);
-                              rkba <= work_bar(15 downto 1) & '0';
-                              npr <= '0';
-                              start <= '0';
-                              rker_dre <= '1';
-                              rkcs_rdy <= '1';
-                              if have_rk_minimal = 0 then
+                                 rkcs_mex <= work_bar(17 downto 16);
+                                 rkba <= work_bar(15 downto 1) & '0';
                                  rkdb <= wrkdb;
+                                 rkcs_rdy <= '1';
+                                 if nxm = '1' then
+                                    rker_nxm <= '1';
+                                 end if;
+                                 if sdcard_error = '1' then
+                                    rker_dre <= '1';
+                                 end if;
                               end if;
-                              start_write <= '0';
 
                            end if;
                         end if;
 
 
-                     when "010" | "011" | "101" =>                                  -- read, write check, read check
-                        npr <= '1';
-                        rksi(conv_integer(rkda_dr)) <= 0;
-                        if npg = '1' then
-                           if sd_state = sd_idle and start_read = '0' then
+                     when "010" | "011" =>                                  -- read, write check
+                        if rkdelay /= 0 then
+                           rkdelay <= rkdelay - 1;
+                        else
+                           rksi(conv_integer(rkda_dr)) <= 0;
+                           if sdcard_idle = '1' and sdcard_read_start = '0' and sdcard_read_done = '0' then
                               if unsigned(rkda_cy) > unsigned'("11001010") then      -- o"000" thru "o"312"
                                  rker_nxc <= '1';
                                  rkcs_rdy <= '1';
-                                 if have_rk_minimal = 0 then
-                                    rkdb <= wrkdb;
-                                 end if;
-                                 npr <= '0';
+                                 rkdb <= wrkdb;
                                  start <= '0';
                               elsif rkda_sc(3 downto 2) = "11" then
                                  rker_nxs <= '1';
                                  rkcs_rdy <= '1';
-                                 if have_rk_minimal = 0 then
-                                    rkdb <= wrkdb;
-                                 end if;
-                                 npr <= '0';
+                                 rkdb <= wrkdb;
                                  start <= '0';
-                              elsif have_rk_minimal = 0 and rkcs_fu /= "010" and (rkcs_fmt = '1' or rkcs_exb = '1') then
+                              elsif rkcs_fu /= "010" and (rkcs_fmt = '1' or rkcs_exb = '1') then
                                  rker_pge <= '1';
                                  rkcs_rdy <= '1';
-                                 if have_rk_minimal = 0 then
-                                    rkdb <= wrkdb;
-                                 end if;
-                                 npr <= '0';
+                                 rkdb <= wrkdb;
                                  start <= '0';
                               else
-                                 start_read <= '1';
+                                 sdcard_read_start <= '1';
                               end if;
-                           elsif sd_state = sd_read_done and start_read = '1' then
-                              rkcs_mex <= work_bar(17 downto 16);
-                              rkba <= work_bar(15 downto 1) & '0';
-                              if unsigned(rkda_sc(3 downto 0)) < unsigned'("1011") then             -- don't increment beyond 11.
-                                 rkda_sc(3 downto 0) <= rkda_sc(3 downto 0) + 1;
-                              else
-                                 rkda_sc(3 downto 0) <= "0000";
-                                 if rkda_hd = '0' then
-                                    rkda_hd <= '1';
+                           elsif sdcard_read_ack = '1' and sdcard_read_done = '0' and sdcard_read_start = '1' then
+                              sdcard_read_start <= '0';
+
+                              if nxm = '0' and sdcard_error = '0' then
+                                 rkcs_mex <= work_bar(17 downto 16);
+                                 rkba <= work_bar(15 downto 1) & '0';
+                                 if unsigned(rkda_sc(3 downto 0)) < unsigned'("1011") then             -- don't increment beyond 11.
+                                    rkda_sc(3 downto 0) <= rkda_sc(3 downto 0) + 1;
                                  else
-                                    if unsigned(rkda_cy) = unsigned'("11001010") and rkcs_fmt /= '1' and unsigned(wcp) > unsigned'("0000000100000000") then      -- o"000" thru "o"312"
-                                       rker_ovr <= '1';
-                                       rkcs_rdy <= '1';
-                                       if have_rk_minimal = 0 then
-                                          rkdb <= wrkdb;
-                                       end if;
-                                       npr <= '0';
-                                       start <= '0';
+                                    rkda_sc(3 downto 0) <= "0000";
+                                    if rkda_hd = '0' then
+                                       rkda_hd <= '1';
                                     else
-                                       rkda_cy <= rkda_cy + 1;
-                                       rkda_hd <= '0';
+                                       if unsigned(rkda_cy) = unsigned'("11001010") and rkcs_fmt /= '1' and unsigned(wcp) > unsigned'("0000000100000000") then      -- o"000" thru "o"312"
+                                          rker_ovr <= '1';
+                                          rkcs_rdy <= '1';
+                                          rkdb <= wrkdb;
+                                          start <= '0';
+                                       else
+                                          rkda_cy <= rkda_cy + 1;
+                                          rkda_hd <= '0';
+                                       end if;
                                     end if;
                                  end if;
-                              end if;
 
-                              if rkcs_fmt = '1' and have_rk_minimal = 0 then
-                                 if unsigned(wcp) > unsigned'("0000000000000001") then               -- check if we need to do another header, and setup for the next round if so
-                                    wcp <= unsigned(wcp) - unsigned'("0000000000000001");
+                                 if rkcs_fmt = '1' then
+                                    if unsigned(wcp) > unsigned'("0000000000000001") then               -- check if we need to do another header, and setup for the next round if so
+                                       wcp <= unsigned(wcp) - unsigned'("0000000000000001");
+                                    else
+                                       wcp <= (others => '0');
+                                       start <= '0';
+                                       rkcs_rdy <= '1';
+                                       rkdb <= wrkdb;
+                                    end if;
                                  else
-                                    wcp <= (others => '0');
-                                    npr <= '0';
-                                    start <= '0';
-                                    rkcs_rdy <= '1';
-                                    if have_rk_minimal = 0 then
+                                    if unsigned(wcp) > unsigned'("0000000100000000") then               -- check if we need to do another sector, and setup for the next round if so
+                                       wcp <= unsigned(wcp) - unsigned'("0000000100000000");
+                                    else
+                                       wcp <= (others => '0');
+                                       start <= '0';
+                                       rkcs_rdy <= '1';
                                        rkdb <= wrkdb;
                                     end if;
                                  end if;
+
                               else
-                                 if unsigned(wcp) > unsigned'("0000000100000000") then               -- check if we need to do another sector, and setup for the next round if so
-                                    wcp <= unsigned(wcp) - unsigned'("0000000100000000");
-                                 else
-                                    wcp <= (others => '0');
-                                    npr <= '0';
-                                    start <= '0';
-                                    rkcs_rdy <= '1';
-                                    if have_rk_minimal = 0 then
-                                       rkdb <= wrkdb;
-                                    end if;
+
+                                 rkcs_mex <= work_bar(17 downto 16);
+                                 rkba <= work_bar(15 downto 1) & '0';
+                                 rkdb <= wrkdb;
+                                 rkcs_rdy <= '1';
+                                 if nxm = '1' then
+                                    rker_nxm <= '1';
+                                 end if;
+                                 if sdcard_error = '1' then
+                                    rker_dre <= '1';
                                  end if;
                               end if;
-                              start_read <= '0';
-
-                           elsif sd_state = sd_error_nxm and have_rk_minimal = 0 then
-                              rkcs_mex <= work_bar(17 downto 16);
-                              rkba <= work_bar(15 downto 1) & '0';
-                              npr <= '0';
-                              start <= '0';
-                              rker_nxm <= '1';
-                              rkcs_rdy <= '1';
-                              if have_rk_minimal = 0 then
-                                 rkdb <= wrkdb;
-                              end if;
-                              start_read <= '0';
-
-                           elsif sd_state = sd_error then
-                              rkcs_mex <= work_bar(17 downto 16);
-                              rkba <= work_bar(15 downto 1) & '0';
-                              npr <= '0';
-                              start <= '0';
-                              rker_dre <= '1';
-                              rkcs_rdy <= '1';
-                              if have_rk_minimal = 0 then
-                                 rkdb <= wrkdb;
-                              end if;
-                              start_read <= '0';
 
                            end if;
                         end if;
 
                      when "100" =>                                  -- seek
-                        if rkcs_fmt = '1' or rkcs_exb = '1' then
-                           rker_pge <= '1';
-                           rkcs_rdy <= '1';
-                           start <= '0';
-                        elsif unsigned(rkda_cy) > unsigned'("11001010") then      -- o"000" thru "o"312"
-                           rker_nxc <= '1';
-                           rkcs_rdy <= '1';
-                           start <= '0';
+                        if rkdelay = 0 then
+                           if rkcs_fmt = '1' or rkcs_exb = '1' then
+                              rker_pge <= '1';
+                              rkcs_rdy <= '1';
+                              start <= '0';
+                           elsif unsigned(rkda_cy) > unsigned'("11001010") then      -- o"000" thru "o"312"
+                              rker_nxc <= '1';
+                              rkcs_rdy <= '1';
+                              start <= '0';
+                           else
+                              rksi(conv_integer(rkda_dr)) <= 3;
+                              rkcs_rdy <= '1';
+                              start <= '0';
+                           end if;
                         else
-                           rksi(conv_integer(rkda_dr)) <= 3;
-                           rkcs_rdy <= '1';
-                           start <= '0';
+                           rkdelay <= rkdelay - 1;
+                        end if;
+
+                     when "101" =>                                  -- read check
+                        if rkdelay = 0 then
+                           if unsigned(rkda_sc(3 downto 0)) < unsigned'("1011") then             -- don't increment beyond 11.
+                              rkda_sc(3 downto 0) <= rkda_sc(3 downto 0) + 1;
+                           else
+                              rkda_sc(3 downto 0) <= "0000";
+                              if rkda_hd = '0' then
+                                 rkda_hd <= '1';
+                              else
+                                 if unsigned(rkda_cy) = unsigned'("11001010") and rkcs_fmt /= '1' and unsigned(wcp) > unsigned'("0000000100000000") then      -- o"000" thru "o"312"
+                                    rker_ovr <= '1';
+                                    rkcs_rdy <= '1';
+                                    start <= '0';
+                                 else
+                                    rkda_cy <= rkda_cy + 1;
+                                    rkda_hd <= '0';
+                                 end if;
+                              end if;
+                           end if;
+
+                           if unsigned(wcp) > unsigned'("0000000100000000") then               -- check if we need to do another sector, and setup for the next round if so
+                              wcp <= unsigned(wcp) - unsigned'("0000000100000000");
+                           else
+                              wcp <= (others => '0');
+                              start <= '0';
+                              rkcs_rdy <= '1';
+                           end if;
+                        else
+                           rkdelay <= rkdelay - 1;
                         end if;
 
                      when "110" =>                                  -- drive reset
-                        if rkcs_fmt = '1' or rkcs_exb = '1' then
-                           rker_pge <= '1';
-                           rkcs_rdy <= '1';
-                           start <= '0';
+                        if rkdelay = 0 then
+                           if rkcs_fmt = '1' or rkcs_exb = '1' then
+                              rker_pge <= '1';
+                              rkcs_rdy <= '1';
+                              start <= '0';
+                           else
+                              rksi(conv_integer(rkda_dr)) <= 3;
+                              rkcs_rdy <= '1';
+                              start <= '0';
+                           end if;
                         else
-                           rksi(conv_integer(rkda_dr)) <= 3;
-                           rkcs_rdy <= '1';
-                           start <= '0';
+                           rkdelay <= rkdelay - 1;
                         end if;
 
                      when others =>                                 -- catchall
-   --                      npr <= '0';
-   --                      rker_dre <= '1';
                         rkcs_rdy <= '1';
                         start <= '0';
 
@@ -912,555 +959,200 @@ begin
    ca_offset <= ("00000" & unsigned(rkda_cy) & "0000") + ("000000" & unsigned(rkda_cy) & "000");            -- cyl * 16 + cyl * 8 == cyl * 24
    dn_offset <= ("00" & unsigned(rkda_dr) & "000000000000") + ("000" & unsigned(rkda_dr) & "00000000000");     -- (disk * 16 + disk * 8) << 8
 
-   sd_addr <= unsigned(dn_offset) + unsigned(hs_offset) + unsigned(ca_offset) + unsigned(rkda_sc);
+   sd_addr <= "000000" & unsigned(dn_offset) + unsigned(hs_offset) + unsigned(ca_offset) + unsigned(rkda_sc);
 
--- handle sd card interface
+-- busmaster
 
-   sdcard_sclk <= sdclock when sdclock_enable = '1' else '0';
-
-   process(sdclock, reset)
+   process(clk, reset)
    begin
-      if sdclock = '1' and sdclock'event then
+      if clk = '1' and clk'event then
          if reset = '1' then
-            sdclock_enable <= '0';
-            counter <= 255;
-            sd_state <= sd_reset;
-            sd_nextstate <= sd_reset;
-            if have_rk_debug /= 0 then
-               sdcard_debug <= "0010";
-            end if;
-            sdcard_cs <= '0';
-
-            blockcounter <= 0;
-            sectorcounter <= "000000000";
+            busmaster_state <= busmaster_idle;
+            npr <= '0';
+            sdcard_read_ack <= '0';
+            sdcard_write_start <= '0';
+            nxm <= '0';
          else
 
             if have_rk = 1 then
-               case sd_state is
 
-   -- reset : start here to set the sd card in spi mode; first step is starting the clock
+               case busmaster_state is
 
-                  when sd_reset =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        counter <= 170;
-                        sdclock_enable <= '1';
-                        sdcard_cs <= '1';
-                        sdcard_mosi <= '1';
-                        sd_state <= sd_clk1;
-                        if have_rk_debug /= 0 then
-                           sdcard_debug <= "0010";
+                  when busmaster_idle =>
+                     nxm <= '0';
+                     if write_start = '1' then
+                        npr <= '1';
+                        if npg = '1' then
+                           busmaster_state <= busmaster_write1;
+                           work_bar <= rkcs_mex & rkba(15 downto 1);
+                           if rkcs_fmt = '1' then                        -- write format
+                              -- rk does not need special write fmt processing
+                           end if;
+                           if unsigned(wcp) >= unsigned'("0000000100000000") then
+                              sectorcounter <= "100000000";
+                           elsif wcp = "0000000000000000" then
+                              sectorcounter <= "000000000";
+                           else
+                              sectorcounter <= '0' & wcp(7 downto 0);
+                           end if;
+
+                           sdcard_xfer_addr <= 0;
+                        end if;
+                     elsif sdcard_read_done = '1' then
+                        npr <= '1';
+                        if npg = '1' then
+                           work_bar <= rkcs_mex & rkba(15 downto 1);
+                           if rkcs_fmt = '1' then                        -- read header/data, write check header/data
+                              busmaster_state <= busmaster_readh;
+                           else
+                              busmaster_state <= busmaster_read1;
+                           end if;
+                           if unsigned(wcp) >= unsigned'("0000000100000000") then
+                              sectorcounter <= "100000000";
+                           else
+                              sectorcounter <= '0' & wcp(7 downto 0);
+                           end if;
+
+                           sdcard_xfer_addr <= 0;
+                           sdcard_xfer_read <= '1';
                         end if;
                      end if;
 
-   -- set the cs signal active
 
-                  when sd_clk1 =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        counter <= 31;
-                        sdcard_cs <= '0';
-                        sd_state <= sd_clk2;
+                  when busmaster_readh =>
+                     bus_master_addr <= work_bar(17 downto 1) & '0';
+                     bus_master_dato <= "000" & rkda_cy & "00000";
+                     bus_master_control_dato <= '1';
+                     if rkcs_iba = '0' then
+                        work_bar <= work_bar + 1;
                      end if;
+                     busmaster_state <= busmaster_read_done;
 
-   -- allow some time to pass with the cs signal active
 
-                  when sd_clk2 =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        sd_state <= sd_cmd0;
+                  when busmaster_readh2 =>
+                     bus_master_addr <= work_bar(17 downto 1) & '0';
+                     bus_master_dato <= x"1111";               -- FIXME, what is the header format?
+                     bus_master_control_dato <= '1';
+                     if rkcs_iba = '0' then
+                        work_bar <= work_bar + 1;
                      end if;
+                     busmaster_state <= busmaster_read_done;
 
-   -- send a cmd0 command, with a valid crc. after completion of this command, the card is in spi mode
 
-                  when sd_cmd0 =>
-                     counter <= 48;
-                     sd_nextstate <= sd_cmd1;
-                     sd_cmd <= x"400000000095";
-                     sd_state <= sd_send_cmd_noresponse;
+                  when busmaster_read1 =>
+                     busmaster_state <= busmaster_read;
+                     bus_master_addr <= work_bar(17 downto 1) & '0';
+                     bus_master_dato <= sdcard_xfer_out;
+                     bus_master_control_dato <= '0';
+                     sdcard_xfer_addr <= sdcard_xfer_addr + 1;
 
-   -- send a cmd1 command, this initializes processes within the card
 
-                  when sd_cmd1 =>
-                     counter <= 48;
-                     sd_nextstate <= sd_cmd1_checkresponse;
-                     sd_cmd <= x"410000000001";
-                     sd_state <= sd_send_cmd;
-
-   -- check for completion of the cmd1 command. This may take a long time, so several retries are normal.
-
-                  when sd_cmd1_checkresponse =>
-                     if sd_r1 = "0000001" then
-                        sd_state <= sd_cmd1;
-                     elsif sd_r1 = "0000000" then
-                        sd_state <= sd_set_block_length;
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-   -- set the default blocklength for read commands. Since 512 is required for all write commands anyway, this is what we'll use.
-
-                  when sd_set_block_length =>
-                     counter <= 48;
-                     sd_nextstate <= sd_set_block_length_checkresponse;
-                     sd_cmd <= x"500000020001";                   -- set blocklength to 512 bytes. It's the default, but let's just be sure anyway.
-                     sd_state <= sd_send_cmd;
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "0001";
-                     end if;
-
-                  when sd_set_block_length_checkresponse =>
-                     if sd_r1 = "0000000" then
-                        sd_state <= sd_idle;                   -- init is complete
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-   -- send a read data command to the card
-
-                  when sd_read =>
-                     work_bar <= rkcs_mex & rkba(15 downto 1);
-                     if have_rk_minimal = 0 and rkcs_fmt = '1' then
-   -- rk05 crazyness... need to read the 'format', and push it into memory using the busmaster. That's why this silly core is in here - don't have the busmaster in the main line core
-                        sd_state <= sd_readfmt;
-                     else
-                        sd_cmd <= x"51" & "000000" & sd_addr & "000000000" & x"01";
-                        sd_nextstate <= sd_read_checkresponse;
-                        counter <= 48;
-                        sd_state <= sd_send_cmd;
-
-                        if have_rk_debug = 1 then
-                           bus_master_addr <= "00" & rkda_dr & rkda_cy & rkda_hd & rkda_sc;
-                        end if;
-                        if have_rk_debug /= 0 then
-                           sdcard_debug <= "0100";
-                        end if;
-                     end if;
-
-                  when sd_readfmt =>
-                     if have_rk_minimal = 0 then
+                  when busmaster_read =>
+                     if sectorcounter /= "000000000" then
                         if rkcs_iba = '0' then
                            work_bar <= work_bar + 1;
                         end if;
-                        bus_master_addr <= work_bar & '0';
-                        bus_master_dato <= "000" & rkda_cy & "00000";
+                        sdcard_xfer_addr <= sdcard_xfer_addr + 1;
+                        sectorcounter <= sectorcounter - 1;
+
                         bus_master_control_dati <= '0';
                         bus_master_control_dato <= '1';
-                     end if;
-                     sd_state <= sd_readfmt2;
-
-                  when sd_readfmt2 =>
-                     bus_master_control_dato <= '0';
-                     sd_state <= sd_read_done;
-
-   -- check the first response (r1 format) to the read command
-
-                  when sd_read_checkresponse =>
-                     if sd_r1 = "0000000" then
---                         counter <= 65535;                            -- some cards may take a long time to respond
-                        sd_state <= sd_read_data_waitstart;
+                        bus_master_addr <= work_bar(17 downto 1) & '0';
+                        bus_master_dato <= sdcard_xfer_out;
+                        wrkdb <= sdcard_xfer_out;
                      else
-                        sd_state <= sd_error;
-                     end if;
-
-                     if have_rk_debug = 1 then
-                        bus_master_addr <= "00" & wcp;
-                     end if;
-
-   -- wait for the data header to be sent in response to the read command; the header value is 0xfe, so actually there is just one start bit to read.
-
-                  when sd_read_data_waitstart =>
---                      if counter /= 0 then
---                         counter <= counter - 1;
-                        if sdcard_miso = '0' then
-                           sd_state <= sd_read_data;
-                           counter <= 15;
-                           blockcounter <= 255;                      -- 256 words = 512 bytes
-                           if unsigned(wcp) >= unsigned'("0000000100000000") then
-                              sectorcounter <= "011111111";           -- 255
-                           else
-                              sectorcounter <= '0' & (unsigned(wcp(7 downto 0)) - unsigned'("00000001"));  -- amount - 1
-                           end if;
-                        end if;
---                      else
---                         sd_state <= sd_error;
---                      end if;
-
-                     if have_rk_debug = 1 then
-                        bus_master_addr <= "00" & rkcs_err & rkcs_he & rkcs_scp & '0' & rkcs_iba & rkcs_fmt & rkcs_exb & rkcs_sse & rkcs_rdy & rkcs_ide & rkcs_mex & rkcs_fu & rkcs_go;
-                     end if;
-
-   -- actual read itself, including moving the data to core. must be bus master at this point.
-
-                  when sd_read_data =>
-                     if counter = 0 then
-                        counter <= 15;
-                        bus_master_addr <= work_bar & '0';
-                        if rkcs_iba = '0' and rkcs_fu /= "101" then
-                           work_bar <= work_bar + 1;
-                        end if;
-                        bus_master_dato <= sd_temp(6 downto 0) & sdcard_miso & sd_temp(14 downto 7);
-                        if have_rk_minimal = 0 then
-                           wrkdb <= sd_temp(6 downto 0) & sdcard_miso & sd_temp(14 downto 7);
-                        end if;
-                        if rkcs_fu = "010" then
-                           bus_master_control_dati <= '0';
-                           bus_master_control_dato <= '1';
-                        end if;
-                        if have_rk_minimal = 0 then
-                           if rkcs_fu = "011" or rkcs_fu = "101" then                        -- write check, read check - cause dati to set, to make nxm occur when it should. Maybe at some point we could also actually check the data - it does not seem all that difficult
-                              bus_master_control_dati <= '1';
-                              bus_master_control_dato <= '0';
-                           end if;
-                        end if;
-                        if sectorcounter = 0 then
-                           sd_state <= sd_read_rest;
-                        else
-                           sectorcounter <= sectorcounter - 1;
-                           blockcounter <= blockcounter - 1;
-                        end if;
-                     else
-                        if bus_master_nxm = '1' then
-                           sd_state <= sd_error_nxm;
-                        end if;
+                        busmaster_state <= busmaster_read_done;
                         bus_master_control_dati <= '0';
                         bus_master_control_dato <= '0';
-                        sd_temp <= sd_temp(14 downto 0) & sdcard_miso;
-                        counter <= counter - 1;
                      end if;
 
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "0101";
+                     if bus_master_nxm = '1' then
+                        nxm <= '1';
+                        busmaster_state <= busmaster_read_done;
                      end if;
 
-   -- skip the rest of the sdcard sector
 
-                  when sd_read_rest =>
-                     if counter = 0 then
-                        counter <= 15;
-                        if blockcounter = 0 then
-                           counter <= 31;
-                           sd_state <= sd_wait;
-                           sd_nextstate <= sd_read_done;
-                        else
-                           blockcounter <= blockcounter - 1;
-                        end if;
-                     else
-                        counter <= counter - 1;
-                     end if;
---                      if bus_master_nxm = '1' then
---                         sd_state <= sd_error_nxm;
---                      end if;
+                  when busmaster_read_done =>
+                     npr <= '0';
+                     sdcard_xfer_read <= '0';
+                     sdcard_read_ack <= '1';
                      bus_master_control_dati <= '0';
                      bus_master_control_dato <= '0';
-
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "0110";
+                     if sdcard_read_ack = '1' and sdcard_read_done = '0' then
+                        busmaster_state <= busmaster_idle;
+                        sdcard_read_ack <= '0';
                      end if;
 
-   -- read done, wait for controller to wake up and allow us on to idle state
 
-                  when sd_read_done =>
-                     if start_read = '0' then
-                        sd_state <= sd_idle;
-                     end if;
-
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "0111";
-                     end if;
-
-   -- send a write data command to the card
-
-                  when sd_write =>
-                     work_bar <= rkcs_mex & rkba(15 downto 1);
-                     sd_cmd <= x"58" & "000000" & sd_addr & "000000000" & x"0f";
-                     sd_nextstate <= sd_write_checkresponse;
-                     counter <= 48;
-                     sd_state <= sd_send_cmd;
-
-                     if have_rk_debug = 1 then
-                        bus_master_addr <= "00" & rkda_dr & rkda_cy & rkda_hd & rkda_sc;
-                     end if;
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "1000";
-                     end if;
-
-   -- check the first response (r1 format) to the write command
-
-                  when sd_write_checkresponse =>
-                     sdcard_mosi <= '1';
-                     if sd_r1 = "0000000" then
-                        counter <= 17;                              -- wait for this many cycles, should correspond to Nwr
-                        sd_state <= sd_write_data_waitstart;
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-                     if have_rk_debug = 1 then
-                        bus_master_addr <= "00" & wcp;
-                     end if;
-
-   -- wait for a while before starting the actual data block
-
-                  when sd_write_data_waitstart =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        sd_state <= sd_write_data_startblock;
-                     end if;
-
-   -- send a start block token, note that the token is actually 1111 1110, but the first 6 bits should already have been sent by waitstart. This state sends another 1, and leaves sending the final 0 over to the next state.
-
-                  when sd_write_data_startblock =>
-                     sd_temp <= "0000000000000000";
-                     counter <= 1;
-                     sd_state <= sd_write_data;
-                     blockcounter <= 256;                      -- 256 words = 512 bytes
-                     if unsigned(wcp) >= unsigned'("0000000100000000") then
-                        sectorcounter <= "100000000";           -- 256
-                     else
-                        sectorcounter <= '0' & wcp(7 downto 0);
-                     end if;
-
-   -- actually send out the bitstream
-
-                  when sd_write_data =>
-                     if counter = 1 and sectorcounter /= 0 then
+                  when busmaster_write1 =>
+                     sdcard_xfer_write <= '0';
+                     sdcard_xfer_addr <= 255;
+                     if sectorcounter /= "000000000" then
+                        bus_master_addr <= work_bar(17 downto 1) & '0';
                         bus_master_control_dati <= '1';
-                        bus_master_control_dato <= '0';
-                        bus_master_addr <= work_bar & '0';
                         if rkcs_iba = '0' then
                            work_bar <= work_bar + 1;
                         end if;
+                        busmaster_state <= busmaster_write;
+                     else
+                        busmaster_state <= busmaster_writen;
                      end if;
-                     if counter = 0 then
-                        sd_temp(15 downto 9) <= bus_master_dati(6 downto 0);
-                        sd_temp(8 downto 1) <= bus_master_dati(15 downto 8);
-                        sd_temp(0) <= '0';
-                        bus_master_control_dati <= '0';
-                        if have_rk_debug = 1 then
-                           bus_master_addr(15 downto 0) <= bus_master_dati;          -- echo data for debugging
-                        end if;
-                        sdcard_mosi <= bus_master_dati(7);
-                        if have_rk_minimal = 0 then
-                           wrkdb <= (others => '0');                                  -- acc. zrkk
-                        end if;
-                        counter <= 15;
-                        if sectorcounter = 0 then
-                           if blockcounter = 0 then
-                              sd_state <= sd_write_crc;
-                           else
-                              sd_state <= sd_write_rest;
+
+
+                  when busmaster_write =>
+                     sectorcounter <= sectorcounter - 1;
+                     if sectorcounter /= "000000000" then
+                        wrkdb <= (others => '0');
+                        sdcard_xfer_in <= bus_master_dati;
+                        sdcard_xfer_write <= '1';
+                        sdcard_xfer_addr <= sdcard_xfer_addr + 1;
+
+                        if sectorcounter /= "000000001" then
+                           if rkcs_iba = '0' then
+                              work_bar <= work_bar + 1;
                            end if;
+                           bus_master_addr <= work_bar(17 downto 1) & '0';
+                           bus_master_control_dati <= '1';
+                        end if;
+                     else
+                        if sdcard_xfer_addr = 255 then
+                           busmaster_state <= busmaster_write_wait;
                         else
-                           sectorcounter <= sectorcounter - 1;
-                           blockcounter <= blockcounter - 1;
+                           busmaster_state <= busmaster_writen;
                         end if;
-                        if bus_master_nxm = '1' then
-                           sd_state <= sd_error_nxm;
-                        end if;
+                        npr <= '0';
+                        bus_master_control_dati <= '0';
+                     end if;
+
+
+                  when busmaster_writen =>
+                     npr <= '0';
+                     if sdcard_xfer_addr = 255 then
+                        busmaster_state <= busmaster_write_wait;
                      else
-                        sdcard_mosi <= sd_temp(15);
-                        counter <= counter - 1;
-                        sd_temp <= sd_temp(14 downto 0) & '0';
+                        sdcard_xfer_in <= (others => '0');
+                        sdcard_xfer_addr <= sdcard_xfer_addr + 1;
+                        sdcard_xfer_write <= '1';
                      end if;
 
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "1001";
+
+                  when busmaster_write_wait =>
+                     sdcard_write_start <= '1';
+                     sdcard_xfer_write <= '0';
+                     if sdcard_write_done = '1' then
+                        busmaster_state <= busmaster_write_done;
+                        sdcard_write_start <= '0';
                      end if;
 
-   -- send out rest of the bitstream, comprising of zeros to fill the block
 
-                  when sd_write_rest =>
-                     if counter = 0 then
-                        counter <= 15;
-                        sdcard_mosi <= '0';
-                        if blockcounter = 0 then
-                           counter <= 15;                            -- 16 crc bits to write
-                           sdcard_mosi <= '1';
-                           sd_state <= sd_write_crc;
-                        else
-                           blockcounter <= blockcounter - 1;
-                        end if;
-                     else
-                        counter <= counter - 1;
+                  when busmaster_write_done =>
+                     sdcard_write_ack <= '1';
+                     if sdcard_write_ack = '1' and sdcard_write_done = '0' then
+                        busmaster_state <= busmaster_idle;
+                        sdcard_write_ack <= '0';
                      end if;
-
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "1010";
-                     end if;
-
-   -- write crc bits, these will be ignored
-
-                  when sd_write_crc =>
-                     if counter = 0 then
-                        counter <= 7;
-                        sd_state <= sd_write_readcardresponse;
-                        sdcard_mosi <= '0';
-                     else
-                        counter <= counter - 1;
-                     end if;
-
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "1010";
-                     end if;
-
-   -- read card response token
-
-                  when sd_write_readcardresponse =>
-                     sd_dr(0) <= sdcard_miso;
-                     sdcard_mosi <= '1';                               -- from this point on, mosi should probably be high
-                     if counter < 3 then
-                        sd_dr(3 downto 1) <= sd_dr(2 downto 0);
-                     end if;
-                     if counter = 0 then
---                         counter <= 65535;
-                        sd_state <= sd_write_waitcardready;
-                     else
-                        counter <= counter - 1;
-                     end if;
-
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "1011";
-                     end if;
-
-   -- wait for card to signal ready
-
-                  when sd_write_waitcardready =>
---                      if counter = 0 then
-   --                     sd_state <= sd_error;                     -- FIXME, should not be commented out
---                      else
---                         counter <= counter - 1;
---                         if have_rk_debug = 1 then
---                            bus_master_addr(3 downto 0) <= sd_dr;                -- FIXME, check the card response
---                         end if;
---                      end if;
-                     if sdcard_miso = '1' then
-                        counter <= 31;
-                        sd_state <= sd_wait;
-                        sd_nextstate <= sd_write_done;
-                     end if;
-
-   -- write done, wait for controller to wake up and allow us on to idle state
-
-                  when sd_write_done =>
-                     if start_write = '0' then
-                        sd_state <= sd_idle;
-                     end if;
-
-   -- idle, wait for the controller to signal us to do some work
-
-                  when sd_idle =>
-                     if start_write = '1' then
-                        sd_state <= sd_write;
-                     end if;
-                     if start_read = '1' then
-                        sd_state <= sd_read;
-                     end if;
-
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "0000";
-                     end if;
-
-   -- here is where we end when the wrong thing happened; wait till the controller has noticed, setup to rest some cycles, then restart
-
-                  when sd_error_nxm =>
-                     bus_master_control_dati <= '0';
-                     bus_master_control_dato <= '0';
-                     if start = '0' then
-                        counter <= 4;
-                        sd_state <= sd_error_recover;
-                     end if;
-
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "1110";
-                     end if;
-
-                  when sd_error =>
-                     if start = '0' then
-                        counter <= 4;
-                        sd_state <= sd_error_recover;
-                     end if;
-
-                     if have_rk_debug /= 0 then
-                        sdcard_debug <= "1111";
-                     end if;
-
-   -- countdown some time and then try to reset the card
-
-                  when sd_error_recover =>
-                     sdcard_cs <= '0';
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        sd_state <= sd_reset;
-                     end if;
-
-   -- clock out what is in the sd_cmd, then setup to wait for a r1 response
-
-                  when sd_send_cmd =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                        sdcard_mosi <= sd_cmd(47);
-                        sd_cmd <= sd_cmd(46 downto 0) & '1';
-                     else
-                        counter <= 255;
-                        sd_state <= sd_readr1wait;
-                     end if;
-
-   -- clock out what in in the sd_cmd
-
-                  when sd_send_cmd_noresponse =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                        sdcard_mosi <= sd_cmd(47);
-                        sd_cmd <= sd_cmd(46 downto 0) & '1';
-                     else
-                        counter <= 16;
-                        sd_state <= sd_wait;
-                     end if;
-
-   -- wait to read an r1 response token from the card
-
-                  when sd_readr1wait =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                        if sdcard_miso = '0' then
-                           sd_state <= sd_readr1;
-                           counter <= 7;
-                           sd_r1 <= (others => '1');
-                        end if;
-                     else
-                        sd_state <= sd_error;
-                     end if;
-
-   -- read the r1 token
-
-                  when sd_readr1 =>
-                     if counter /= 0 then
-                        sd_r1 <= sd_r1(5 downto 0) & sdcard_miso;
-                        counter <= counter - 1;
-                     else
-                        counter <= 8;
-                        sd_state <= sd_wait;
-                     end if;
-
-   -- wait some cycles after a command sequence, this seems to improve stability across card types
-
-                  when sd_wait =>
-                     if counter /= 0 then
-                        counter <= counter - 1;
-                     else
-                        sd_state <= sd_nextstate;
-                     end if;
-
-   -- catchall
 
                   when others =>
-                     sd_state <= sd_reset;
 
                end case;
 

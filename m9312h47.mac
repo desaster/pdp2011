@@ -4,7 +4,7 @@
 ; boot code taken from http://ak6dn.dyndns.org/PDP-11/M9312/ and modified to work with m9312l47.mac
 ; which does not include diagnostics, does not use the rom code letters.
 ;
-; $Revision: 1.3 $
+; $Revision$
 
 bit0     =000001              ; plain old bit definitions
 bit1     =000002              ;
