@@ -95,8 +95,7 @@ set_location_assignment PIN_T3 -to greenled[2]
 set_location_assignment PIN_T4 -to greenled[1]
 set_location_assignment PIN_M6 -to greenled[0]
 
-# add button to PIN_J2
-# button on adapter: PIN_j2
+# button on adapter: PIN_J2
 # button on cyc1000: PIN_N6
 set_location_assignment PIN_N6 -to key0
 
