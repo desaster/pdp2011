@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -31,7 +31,7 @@ entity pmodda2 is
 
       reset : in std_logic;
       clk : in std_logic
-    );
+   );
 end pmodda2;
 
 architecture implementation of pmodda2 is

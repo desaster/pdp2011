@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -61,7 +61,9 @@ entity rh11 is
 
       have_rh : in integer range 0 to 1 := 0;
       have_rh70 : in integer range 0 to 1 := 0;
-      rh_type : in integer range 4 to 7 := 6;
+      rh_type : in integer range 1 to 7 := 6;              -- 1:RM06; 2:RP2G; 3:-;4:RP04/RP05; 5:RM05; 6:RP06; 7:RP07
+      rh_noofcyl : in integer range 128 to 8192 := 1024;   -- for RM06 and RP2G: how many cylinders are available
+
       reset : in std_logic;
       clk50mhz : in std_logic;
       nclk : in std_logic;
@@ -80,7 +82,7 @@ component sdspi is
       sdcard_miso : in std_logic := '0';
       sdcard_debug : out std_logic_vector(3 downto 0);
 
-      sdcard_addr : in std_logic_vector(22 downto 0);
+      sdcard_addr : in std_logic_vector(23 downto 0);
 
       sdcard_idle : out std_logic;
       sdcard_read_start : in std_logic;
@@ -208,8 +210,8 @@ signal rmof_ofd : std_logic;
 -- rmdc  17 776 734                                             -- cylinder
 signal rmdc : std_logic_vector(15 downto 0);                         -- desired cylinder number
 
--- rmhr  17 776 736                                                  -- holding register
-signal rmhr : std_logic_vector(15 downto 0);                         -- holding register
+-- rmhr  17 776 736                                                  -- holding register (rm05) current cylinder (rp0x)
+--signal rmhr : std_logic_vector(15 downto 0);                         -- holding register
 
 -- rmmr2 17 776 740
 signal rmmr2 : std_logic_vector(15 downto 0);
@@ -284,10 +286,10 @@ signal sdcard_error : std_logic;
 
 signal nxm : std_logic;
 signal sectorcounter : std_logic_vector(8 downto 0);            -- counter within sector
-signal hs_offset : std_logic_vector(22 downto 0);
-signal ca_offset : std_logic_vector(22 downto 0);
-signal dn_offset : std_logic_vector(22 downto 0);
-signal sd_addr : std_logic_vector(22 downto 0);
+signal hs_offset : std_logic_vector(23 downto 0);
+signal ca_offset : std_logic_vector(23 downto 0);
+signal dn_offset : std_logic_vector(23 downto 0);
+signal sd_addr : std_logic_vector(23 downto 0);
 
 type busmaster_state_t is (
    busmaster_idle,
@@ -308,24 +310,30 @@ signal busmaster_state : busmaster_state_t := busmaster_idle;
 begin
 
    with rh_type select noofsec <=
-      "00010110" when 4,                         -- 22
-      "00100000" when 5,                         -- 32
-      "00010110" when 6,                         -- 22
-      "00110010" when 7,                         -- 50
+      "01000000" when 1,                         -- 64                         RM06
+      "01000000" when 2,                         -- 64                         RP2G
+      "00010110" when 4,                         -- 22                         RP04/RP05
+      "00100000" when 5,                         -- 32                         RM05
+      "00010110" when 6,                         -- 22                         RP06
+      "00110010" when 7,                         -- 50                         RP07
       "00000000" when others;
 
    with rh_type select nooftrk <=
-      "00010011" when 4,                         -- 19
-      "00010011" when 5,                         -- 19
-      "00010011" when 6,                         -- 19
-      "00100000" when 7,                         -- 32
+      "00100000" when 1,                         -- 32                         RM06
+      "01000000" when 2,                         -- 64                         RP2G
+      "00010011" when 4,                         -- 19                         RP04/RP05
+      "00010011" when 5,                         -- 19                         RM05
+      "00010011" when 6,                         -- 19                         RP06
+      "00100000" when 7,                         -- 32                         RP07
       "00000000" when others;
 
    with rh_type select noofcyl <=
-      "0000000110011011" when 4,                 -- 411 = 171798
-      "0000001100110111" when 5,                 -- 823 = 500384
-      "0000001100101111" when 6,                 -- 815 = 340670
-      "0000001001110110" when 7,                 -- 630 = 1008000
+      conv_std_logic_vector(rh_noofcyl,noofcyl'length) when 1,       --        RM06
+      conv_std_logic_vector(rh_noofcyl,noofcyl'length) when 2,       --        RP2G
+      "0000000110011011" when 4,                 -- 411 = 171798               RP04/RP05
+      "0000001100110111" when 5,                 -- 823 = 500384               RM05
+      "0000001100101111" when 6,                 -- 815 = 340670               RP06
+      "0000001001110110" when 7,                 -- 630 = 1008000              RP07
       "0000000000000000" when others;
 
 
@@ -508,6 +516,10 @@ begin
 -- rmdt  17 776 726                                             -- drive type
                      when "01011" =>
                         case rh_type is
+                           when 1 =>
+                              bus_dati <= "0" & o"00047";       -- the mythical rm06
+                           when 2 =>
+                              bus_dati <= "0" & o"20222";       -- the mythical rp2g
                            when 4 =>
                               bus_dati <= "0" & o"20020";
                            when 5 =>
@@ -530,12 +542,16 @@ begin
 
 -- rmdc  17 776 734                                             -- cylinder
                      when "01110" =>
-                        bus_dati <= "000000" & rmdc(9 downto 0);
+                        bus_dati <= rmdc;
 
 -- rmhr  17 776 736                                             -- holding register (rm05) current cylinder (rp0x)
                      when "01111" =>
 --                        bus_dati <= rmhr;
-                        bus_dati <= "000000" & rmdc(9 downto 0);
+                        if rh_type = 1 then                     -- for RM06
+                           bus_dati <= noofcyl - 1;
+                        else
+                           bus_dati <= rmdc;
+                        end if;
 
 -- rmmr2 17 776 740
                      when "10000" =>
@@ -919,6 +935,18 @@ begin
                            rmds_dry <= '1';
 --                           rmcs1_rdyset <= '1';
 
+                        when "10011" =>             -- ident for RM06
+                           if rh_type = 1 then
+                              rmcs1_go <= '0';
+                              rmds_dry <= '1';
+                           else
+                              rmer1_ilf <= '1';
+                              rmer2_ivc <= '1';
+                              rmds_ataset <= '1';
+                              rmcs1_go <= '0';
+                              rmds_dry <= '1';
+                           end if;
+
                         when "11000" | "11001" =>             -- write data, write header/data
                            rmcs1_rdy <= '0';
                            rmds_om <= '0';
@@ -1187,46 +1215,64 @@ begin
 
 -- compose sector address
 
--- 23 bits adders :-)
+-- 24 bits adders :-)
    ca_offset <=
-      ("0000" & rmdc(9 downto 0) & "000000000")
-      + ("0000000" & rmdc(9 downto 0) & "000000")
-      + ("00000000" & rmdc(9 downto 0) & "00000")
-   when rh_type = 5  -- rmdc * 608
+      ("000000" & rmdc(9 downto 0) & "00000000")
+      + ("0000000" & rmdc(9 downto 0) & "0000000")
+      + ("000000000" & rmdc(9 downto 0) & "00000")
+      + ("0000000000000" & rmdc(9 downto 0) & "0")
+   when rh_type = 4                                                  -- rmdc * 418, rp04/rp05
    else
-      ("00000" & rmdc(9 downto 0) & "00000000")
-      + ("000000" & rmdc(9 downto 0) & "0000000")
-      + ("00000000" & rmdc(9 downto 0) & "00000")
-      + ("000000000000" & rmdc(9 downto 0) & "0")
-   when rh_type = 4
+      ("00000" & rmdc(9 downto 0) & "000000000")
+      + ("00000000" & rmdc(9 downto 0) & "000000")
+      + ("000000000" & rmdc(9 downto 0) & "00000")
+   when rh_type = 5                                                  -- rmdc * 608, rm05
    else
-      ("00000" & rmdc(9 downto 0) & "00000000")
-      + ("000000" & rmdc(9 downto 0) & "0000000")
-      + ("00000000" & rmdc(9 downto 0) & "00000")
-      + ("000000000000" & rmdc(9 downto 0) & "0")
-   when rh_type = 6
-   else "00000000000000000000000";
+      ("000000" & rmdc(9 downto 0) & "00000000")
+      + ("0000000" & rmdc(9 downto 0) & "0000000")
+      + ("000000000" & rmdc(9 downto 0) & "00000")
+      + ("0000000000000" & rmdc(9 downto 0) & "0")
+   when rh_type = 6                                                  -- rmdc * 418, rp06
+   else
+      + ("0000" & rmdc(9 downto 0) & "0000000000")
+      + ("00000" & rmdc(9 downto 0) & "000000000")
+      + ("00000000" & rmdc(9 downto 0) & "000000")
+   when rh_type = 7                                                  -- rmdc * 1600, rp07
+   else "000000000000000000000000";
 
    sd_addr <=
-      unsigned(ca_offset)
-      + unsigned("0000000000000" & rmda_ta(4 downto 0) & "00000")
-      + unsigned("000000000000000000" & rmda_sa(4 downto 0))
-   when rh_type = 5
+      rmdc(12 downto 0) & rmda_ta(4 downto 0) & rmda_sa(5 downto 0)
+   when rh_type = 1                                                  -- 2048*dc + 64*ta + sa : rm06
+   else
+      rmdc(11 downto 0) & rmda_ta(5 downto 0) & rmda_sa(5 downto 0)
+   when rh_type = 2                                                  -- 4096*dc + 64*ta + sa : rp2g
    else
       unsigned(ca_offset)
-      + unsigned("00000000000000" & rmda_ta(4 downto 0) & "0000")
-      + unsigned("0000000000000000" & rmda_ta(4 downto 0) & "00")
-      + unsigned("00000000000000000" & rmda_ta(4 downto 0) & "0")
-      + unsigned("000000000000000000" & rmda_sa(4 downto 0))
-   when rh_type = 4
+      + unsigned("000000000000000" & rmda_ta(4 downto 0) & "0000")
+      + unsigned("00000000000000000" & rmda_ta(4 downto 0) & "00")
+      + unsigned("000000000000000000" & rmda_ta(4 downto 0) & "0")
+      + unsigned("0000000000000000000" & rmda_sa(4 downto 0))
+   when rh_type = 4                                                  -- 418*dc + 22*ta + sa : rp04/rp05
    else
       unsigned(ca_offset)
-      + unsigned("00000000000000" & rmda_ta(4 downto 0) & "0000")
-      + unsigned("0000000000000000" & rmda_ta(4 downto 0) & "00")
-      + unsigned("00000000000000000" & rmda_ta(4 downto 0) & "0")
-      + unsigned("000000000000000000" & rmda_sa(4 downto 0))
-   when rh_type = 6
-   else "00000000000000000000000";
+      + unsigned("00000000000000" & rmda_ta(4 downto 0) & "00000")
+      + unsigned("0000000000000000000" & rmda_sa(4 downto 0))
+   when rh_type = 5                                                  -- 608*dc + 32*ta + sa : rm05
+   else
+      unsigned(ca_offset)
+      + unsigned("000000000000000" & rmda_ta(4 downto 0) & "0000")
+      + unsigned("00000000000000000" & rmda_ta(4 downto 0) & "00")
+      + unsigned("000000000000000000" & rmda_ta(4 downto 0) & "0")
+      + unsigned("0000000000000000000" & rmda_sa(4 downto 0))
+   when rh_type = 6                                                  -- 418*dc + 22*ta + sa : rp06
+   else
+      unsigned(ca_offset)
+      + unsigned("00000000000000" & rmda_ta(4 downto 0) & "00000")
+      + unsigned("000000000000000" & rmda_ta(4 downto 0) & "0000")
+      + unsigned("000000000000000000" & rmda_ta(4 downto 0) & "0")
+      + unsigned("000000000000000000" & rmda_sa(5 downto 0))
+   when rh_type = 7                                                  -- 1600*dc + 50*ta + sa : rp07
+   else "000000000000000000000000";
 
 -- busmaster
 
@@ -1290,7 +1336,7 @@ begin
                   when busmaster_readh =>
                      if have_rh70 = 1 then
                         rh70_bus_master_addr <= work_bar & '0';
-                        rh70_bus_master_dato <= "110" & rmof_fmt & rmdc(11 downto 0);
+                        rh70_bus_master_dato <= "110" & rmof_fmt & rmdc(11 downto 0);  -- this is for testing only, so don't need it for rm06/rp2g. But it won't do any harm.
                         rh70_bus_master_control_dato <= '1';
                      else
                         bus_master_addr <= work_bar(17 downto 1) & '0';

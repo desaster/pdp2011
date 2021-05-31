@@ -174,21 +174,6 @@ set_location_assignment PIN_N14 -to xu_cs
 set_location_assignment PIN_M10 -to xu_miso
 set_location_assignment PIN_N16 -to xu_mosi
 set_location_assignment PIN_J13 -to xu_sclk
-#set_global_assignment -name CYCLONEII_OPTIMIZATION_TECHNIQUE SPEED
-#set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC ON
-#set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
-#set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON
-#set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
-#set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL MAXIMUM
-#set_global_assignment -name AUTO_PACKED_REGISTERS_STRATIXII NORMAL
-#set_global_assignment -name SMART_RECOMPILE ON
-#set_global_assignment -name ENABLE_DRC_SETTINGS ON
-#set_instance_assignment -name GLOBAL_SIGNAL "GLOBAL CLOCK" -to clkin
-#set_instance_assignment -name GLOBAL_SIGNAL "GLOBAL CLOCK" -to cpuclk
-#set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
-
-set_global_assignment -name ENABLE_DRC_SETTINGS OFF
-set_global_assignment -name SMART_RECOMPILE OFF
 set_location_assignment PIN_T13 -to panel_row[2]
 set_location_assignment PIN_T14 -to panel_row[1]
 set_location_assignment PIN_L13 -to panel_row[0]
@@ -222,18 +207,9 @@ set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[3]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[2]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[1]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[0]
-set_global_assignment -name ENABLE_SIGNALTAP OFF
-set_global_assignment -name USE_SIGNALTAP_FILE stp2.stp
-set_global_assignment -name EDA_SIMULATION_TOOL "ModelSim-Altera (VHDL)"
 
-set_location_assignment PIN_D16 -to da_sync0
-set_location_assignment PIN_F15 -to da_sclk0
-set_location_assignment PIN_D15 -to da_dina0
-set_location_assignment PIN_D14 -to da_dinb0
 set_global_assignment -name VHDL_FILE ../mncdo.vhd
 set_global_assignment -name VHDL_FILE ../mncdi.vhd
-set_global_assignment -name VHDL_FILE pmodda2.vhd
-set_global_assignment -name VHDL_FILE de0adc.vhd
 set_global_assignment -name VHDL_FILE ../mncaa.vhd
 set_global_assignment -name VHDL_FILE ../mnckw.vhd
 set_global_assignment -name VHDL_FILE ../mncad.vhd
@@ -265,4 +241,5 @@ set_global_assignment -name VHDL_FILE ../cpu.vhd
 set_global_assignment -name QIP_FILE pll.qip
 set_global_assignment -name SOURCE_FILE Spf1.spf
 set_global_assignment -name SOURCE_FILE db/top.cmp.rdb
+
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

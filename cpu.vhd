@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -5128,7 +5128,11 @@ begin
                         else
                            falu_output <= (others => '0');
                            if falu_input(63) = '1' then
-                              falu_output(63 downto 32) <= (not falu_work1(58 downto 27)) + 1;
+                              if fps(6) = '0' then
+                                 falu_output(63 downto 48) <= (not falu_work1(58 downto 43)) + 1;
+                              else
+                                 falu_output(63 downto 32) <= (not falu_work1(58 downto 27)) + 1;
+                              end if;
                            else
                               falu_output(63 downto 32) <= falu_work1(58 downto 27);
                            end if;
@@ -5380,14 +5384,14 @@ begin
 
                   when others =>
                      falu_output <= (others => 'X');
-                     falu_fps(3 downto 0) <= "XXXX";
+                     falu_fps(3 downto 0) <= (others => 'X');
 
                end case;
                falu_output2 <= (others => 'X');
             else
                falu_output <= (others => 'X');
                falu_output2 <= (others => 'X');
-               falu_fps(3 downto 0) <= "XXXX";
+               falu_fps(3 downto 0) <= (others => 'X');
             end if;
          end if;
 

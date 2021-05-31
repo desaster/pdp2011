@@ -1,17 +1,17 @@
 # -------------------------------------------------------------------------- #
 #
 # Copyright (C) 1991-2009 Altera Corporation
-# Your use of Altera Corporation's design tools, logic functions 
-# and other software and tools, and its AMPP partner logic 
-# functions, and any output files from any of the foregoing 
-# (including device programming or simulation files), and any 
-# associated documentation or information are expressly subject 
-# to the terms and conditions of the Altera Program License 
-# Subscription Agreement, Altera MegaCore Function License 
-# Agreement, or other applicable license agreement, including, 
-# without limitation, that your use is for the sole purpose of 
-# programming logic devices manufactured by Altera and sold by 
-# Altera or its authorized distributors.  Please refer to the 
+# Your use of Altera Corporation's design tools, logic functions
+# and other software and tools, and its AMPP partner logic
+# functions, and any output files from any of the foregoing
+# (including device programming or simulation files), and any
+# associated documentation or information are expressly subject
+# to the terms and conditions of the Altera Program License
+# Subscription Agreement, Altera MegaCore Function License
+# Agreement, or other applicable license agreement, including,
+# without limitation, that your use is for the sole purpose of
+# programming logic devices manufactured by Altera and sold by
+# Altera or its authorized distributors.  Please refer to the
 # applicable agreement for further details.
 #
 # -------------------------------------------------------------------------- #
@@ -42,15 +42,8 @@ set_global_assignment -name TOP_LEVEL_ENTITY top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 9.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "23:14:32  MARCH 19, 2009"
 set_global_assignment -name LAST_QUARTUS_VERSION "13.0 SP1"
-set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
-set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
-set_global_assignment -name LL_ROOT_REGION ON -section_id "Root Region"
-set_global_assignment -name LL_MEMBER_STATE LOCKED -section_id "Root Region"
-set_global_assignment -name USE_GENERATED_PHYSICAL_CONSTRAINTS OFF -section_id eda_blast_fpga
 set_global_assignment -name DEVICE_FILTER_PIN_COUNT 484
 set_global_assignment -name DEVICE_FILTER_SPEED_GRADE 7
-set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
-set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_location_assignment PIN_L1 -to clkin
 set_location_assignment PIN_Y21 -to greenled[7]
 set_location_assignment PIN_Y22 -to greenled[6]
@@ -118,21 +111,6 @@ set_location_assignment PIN_Y20 -to sdcard_mosi
 set_location_assignment PIN_V20 -to sdcard_sclk
 set_global_assignment -name CYCLONEII_RESERVE_NCEO_AFTER_CONFIGURATION "USE AS REGULAR IO"
 set_global_assignment -name RESERVE_ASDO_AFTER_CONFIGURATION "AS INPUT TRI-STATED"
-set_global_assignment -name STRATIX_CONFIGURATION_DEVICE EPCS4
-set_global_assignment -name OPTIMIZE_HOLD_TIMING "ALL PATHS"
-set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
-set_global_assignment -name OPTIMIZE_TIMING "NORMAL COMPILATION"
-set_global_assignment -name FMAX_REQUIREMENT "5 MHz" -section_id clkin
-set_instance_assignment -name CLOCK_SETTINGS clkin -to clkin
-set_global_assignment -name POWER_USE_TA_VALUE 21
-set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
-set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
-set_global_assignment -name PHYSICAL_SYNTHESIS_EFFORT EXTRA
-set_global_assignment -name SAVE_DISK_SPACE OFF
-set_global_assignment -name RTLV_GROUP_COMB_LOGIC_IN_CLOUD_TMV ON
-set_global_assignment -name USE_CONFIGURATION_DEVICE ON
-set_global_assignment -name ON_CHIP_BITSTREAM_DECOMPRESSION OFF
-set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_location_assignment PIN_B10 -to vgab[3]
 set_location_assignment PIN_A10 -to vgab[2]
 set_location_assignment PIN_D11 -to vgab[1]
@@ -147,6 +125,8 @@ set_location_assignment PIN_A7 -to vgar[2]
 set_location_assignment PIN_C9 -to vgar[1]
 set_location_assignment PIN_D9 -to vgar[0]
 set_location_assignment PIN_B11 -to vgav
+set_location_assignment PIN_H15 -to ps2k_c
+set_location_assignment PIN_J14 -to ps2k_d
 set_location_assignment PIN_N6 -to dram_addr[11]
 set_location_assignment PIN_W3 -to dram_addr[10]
 set_location_assignment PIN_N4 -to dram_addr[9]
@@ -185,22 +165,6 @@ set_location_assignment PIN_R7 -to dram_ldqm
 set_location_assignment PIN_T5 -to dram_ras_n
 set_location_assignment PIN_M5 -to dram_udqm
 set_location_assignment PIN_R8 -to dram_we_n
-set_global_assignment -name PHYSICAL_SYNTHESIS_ASYNCHRONOUS_SIGNAL_PIPELINING OFF
-set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION OFF
-set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC OFF
-set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING OFF
-set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC_FOR_AREA OFF
-set_global_assignment -name PHYSICAL_SYNTHESIS_MAP_LOGIC_TO_MEMORY_FOR_AREA OFF
-set_global_assignment -name SYNTH_TIMING_DRIVEN_SYNTHESIS OFF
-set_global_assignment -name OPTIMIZE_POWER_DURING_SYNTHESIS "NORMAL COMPILATION"
-set_global_assignment -name HDL_MESSAGE_LEVEL LEVEL3
-set_global_assignment -name PARALLEL_SYNTHESIS ON
-set_global_assignment -name AUTO_RAM_RECOGNITION ON
-set_global_assignment -name STRICT_RAM_RECOGNITION OFF
-set_global_assignment -name NUMBER_OF_REMOVED_REGISTERS_REPORTED 5000
-set_global_assignment -name NUMBER_OF_INVERTED_REGISTERS_REPORTED 100
-set_global_assignment -name SYNTH_MESSAGE_LEVEL MEDIUM
-set_global_assignment -name OPTIMIZE_MULTI_CORNER_TIMING ON
 set_location_assignment PIN_H18 -to xu_cs
 set_location_assignment PIN_N22 -to xu_miso
 set_location_assignment PIN_G18 -to xu_mosi
@@ -239,6 +203,14 @@ set_location_assignment PIN_D16 -to panel_xled[3]
 set_location_assignment PIN_D15 -to panel_xled[2]
 set_location_assignment PIN_P18 -to panel_xled[1]
 set_location_assignment PIN_N15 -to panel_xled[0]
+set_global_assignment -name VHDL_FILE ../vgafont.vhd
+set_global_assignment -name VHDL_FILE ../vtbrt42.vhd
+set_global_assignment -name VHDL_FILE ../sdspi.vhd
+set_global_assignment -name VHDL_FILE ../mnckw.vhd
+set_global_assignment -name VHDL_FILE ../mncdo.vhd
+set_global_assignment -name VHDL_FILE ../mncdi.vhd
+set_global_assignment -name VHDL_FILE ../mncad.vhd
+set_global_assignment -name VHDL_FILE ../mncaa.vhd
 set_global_assignment -name VHDL_FILE ../m9312h47.vhd
 set_global_assignment -name VHDL_FILE ../m9312l47.vhd
 set_global_assignment -name VHDL_FILE ../dr11c.vhd
@@ -257,8 +229,6 @@ set_global_assignment -name VHDL_FILE ../cr.vhd
 set_global_assignment -name VHDL_FILE ../rl11.vhd
 set_global_assignment -name VHDL_FILE ../mmu.vhd
 set_global_assignment -name VHDL_FILE ../kw11l.vhd
-set_global_assignment -name VHDL_FILE ../gensdclk.vhd
-set_global_assignment -name VHDL_FILE ../genlineclk.vhd
 set_global_assignment -name VHDL_FILE ../fpuregs.vhd
 set_global_assignment -name VHDL_FILE ../csdr.vhd
 set_global_assignment -name VHDL_FILE ../cpuregs.vhd
@@ -267,4 +237,8 @@ set_global_assignment -name VHDL_FILE top.vhd
 set_global_assignment -name VHDL_FILE ssegdecoder.vhd
 set_global_assignment -name CDF_FILE top.cdf
 set_global_assignment -name QIP_FILE pll.qip
+
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top

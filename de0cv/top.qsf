@@ -42,7 +42,7 @@ set_global_assignment -name DEVICE 5CEBA4F23C7
 set_global_assignment -name TOP_LEVEL_ENTITY top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 16.1.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "16:57:54  DECEMBER 14, 2016"
-set_global_assignment -name LAST_QUARTUS_VERSION "18.1.0 Lite Edition"
+set_global_assignment -name LAST_QUARTUS_VERSION "20.1.0 Lite Edition"
 set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 256
@@ -414,6 +414,22 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to tx1
 set_location_assignment PIN_H15 -to rx1
 set_location_assignment PIN_B12 -to tx1
 
+
+set_global_assignment -name ENABLE_SIGNALTAP OFF
+set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
+set_global_assignment -name OPTIMIZE_HOLD_TIMING "IO PATHS AND MINIMUM TPD PATHS"
+set_global_assignment -name FITTER_EFFORT "FAST FIT"
+set_global_assignment -name ALM_REGISTER_PACKING_EFFORT LOW
+set_global_assignment -name OPTIMIZE_POWER_DURING_FITTING OFF
+set_global_assignment -name PHYSICAL_SYNTHESIS_EFFORT FAST
+set_global_assignment -name VHDL_FILE ../vgafont.vhd
+set_global_assignment -name VHDL_FILE ../vtbrt42.vhd
+set_global_assignment -name VHDL_FILE ../sdspi.vhd
+set_global_assignment -name VHDL_FILE ../mnckw.vhd
+set_global_assignment -name VHDL_FILE ../mncdo.vhd
+set_global_assignment -name VHDL_FILE ../mncdi.vhd
+set_global_assignment -name VHDL_FILE ../mncad.vhd
+set_global_assignment -name VHDL_FILE ../mncaa.vhd
 set_global_assignment -name VHDL_FILE ../dr11c.vhd
 set_global_assignment -name VHDL_FILE ../paneldb.vhd
 set_global_assignment -name VHDL_FILE ../paneldriver.vhd
@@ -422,7 +438,6 @@ set_global_assignment -name SDC_FILE top.sdc
 set_global_assignment -name VHDL_FILE ../m9312l47.vhd
 set_global_assignment -name VHDL_FILE ../m9312h47.vhd
 set_global_assignment -name VHDL_FILE ssegdecoder.vhd
-set_global_assignment -name VHDL_FILE ../blockramt42.vhd
 set_global_assignment -name VHDL_FILE ../xubrt45.vhd
 set_global_assignment -name VHDL_FILE ../xubm.vhd
 set_global_assignment -name VHDL_FILE ../xubl.vhd
@@ -445,8 +460,5 @@ set_global_assignment -name VHDL_FILE ../cpuregs.vhd
 set_global_assignment -name VHDL_FILE ../cpu.vhd
 set_global_assignment -name QIP_FILE pll.qip
 set_global_assignment -name SIP_FILE pll.sip
-
-set_global_assignment -name ENABLE_SIGNALTAP OFF
-set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
 set_global_assignment -name SIGNALTAP_FILE stp1.stp
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

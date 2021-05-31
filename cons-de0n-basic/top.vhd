@@ -1,6 +1,6 @@
- 
+
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -62,12 +62,6 @@ entity top is
       dram_we_n : out std_logic;
       dram_cs_n : out std_logic;
 
-      -- pmodda2
-      da_dina0 : out std_logic;
-      da_dinb0 : out std_logic;
-      da_sclk0 : out std_logic;
-      da_sync0 : out std_logic;
-
       -- board peripherals
       adc_cs_n : out std_logic;
       adc_saddr : out std_logic;
@@ -124,7 +118,7 @@ component unibus is
       rh_sdcard_sclk : out std_logic;
       rh_sdcard_miso : in std_logic := '0';
       rh_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
-      rh_type : in integer range 4 to 7 := 6;
+      rh_type : in integer range 1 to 7 := 6;
 
 -- xu enc424j600 controller interface
       have_xu : in integer range 0 to 1 := 0;                        -- enable conditional compilation
@@ -192,9 +186,9 @@ component unibus is
 
       have_mncad : in integer range 0 to 1 := 0;                     -- mncad: a/d, max one card in a system
       have_mnckw : in integer range 0 to 2 := 0;                     -- mnckw: clock, either one or two
-      have_mncaa : in integer range 0 to 1 := 0;                     -- mncaa: d/a
-      have_mncdi : in integer range 0 to 1 := 0;                     -- mncdo: digital in
-      have_mncdo : in integer range 0 to 1 := 0;                     -- mncdo: digital out
+      have_mncaa : in integer range 0 to 4 := 0;                     -- mncaa: d/a
+      have_mncdi : in integer range 0 to 4 := 0;                     -- mncdi: digital in
+      have_mncdo : in integer range 0 to 4 := 0;                     -- mncdo: digital out
       ad_start : out std_logic;                                      -- interface from mncad to a/d hardware : '1' signals to start converting
       ad_done : in std_logic := '1';                                 -- interface from mncad to a/d hardware : '1' signals to the mncad that the a/d has completed a conversion
       ad_channel : out std_logic_vector(5 downto 0);                 -- interface from mncad to a/d hardware : the channel number for the current command
@@ -202,23 +196,62 @@ component unibus is
       ad_sample : in std_logic_vector(11 downto 0) := "000000000000";-- interface from mncad to a/d hardware : the value of the last sample
       kw_st1in : in std_logic := '0';                                -- mnckw0 st1 signal input, active on rising edge
       kw_st2in : in std_logic := '0';                                -- mnckw0 st2 signal input, active on rising edge
-      kw_st1out : out std_logic;                                     -- mnckw0 st1 output pulse (actually : copy of the st1flag in the csr
+      kw_st1out : out std_logic;                                     -- mnckw0 st1 output pulse - actually : copy of the st1flag in the csr
       kw_st2out : out std_logic;                                     -- mnckw0 st2 output pulse
       kw_clkov : out std_logic;                                      -- mnckw0 clkovf output pulse
-      da_dac1 : out std_logic_vector(11 downto 0);
-      da_dac2 : out std_logic_vector(11 downto 0);
-      da_dac3 : out std_logic_vector(11 downto 0);
-      da_dac4 : out std_logic_vector(11 downto 0);
+      da_dac0 : out std_logic_vector(11 downto 0);                   -- da channel 0 - 1st mncaa unit
+      da_dac1 : out std_logic_vector(11 downto 0);                   -- da channel 1
+      da_dac2 : out std_logic_vector(11 downto 0);                   -- da channel 2
+      da_dac3 : out std_logic_vector(11 downto 0);                   -- da channel 3
+      da_dac4 : out std_logic_vector(11 downto 0);                   -- da channel 4 - 2nd mncaa unit
+      da_dac5 : out std_logic_vector(11 downto 0);                   -- da channel 5
+      da_dac6 : out std_logic_vector(11 downto 0);                   -- da channel 6
+      da_dac7 : out std_logic_vector(11 downto 0);                   -- da channel 7
+      da_dac8 : out std_logic_vector(11 downto 0);                   -- da channel 8 - 3rd mncaa unit
+      da_dac9 : out std_logic_vector(11 downto 0);                   -- da channel 9
+      da_dac10 : out std_logic_vector(11 downto 0);                  -- da channel 10
+      da_dac11 : out std_logic_vector(11 downto 0);                  -- da channel 11
+      da_dac12 : out std_logic_vector(11 downto 0);                  -- da channel 12 - 4th mncaa unit
+      da_dac13 : out std_logic_vector(11 downto 0);                  -- da channel 13
+      da_dac14 : out std_logic_vector(11 downto 0);                  -- da channel 14
+      da_dac15 : out std_logic_vector(11 downto 0);                  -- da channel 15
       have_diloopback : in integer range 0 to 1 := 0;                -- set to 1 to loop back mncdo0 to mncdi0 internally for testing
-      di_dir : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi0 data input register
-      di_strobe : in std_logic := '0';
-      di_reply : out std_logic;
-      di_pgmout : out std_logic;
-      di_event : out std_logic;
-      do_dor : out std_logic_vector(15 downto 0);
-      do_hb_strobe : out std_logic;
-      do_lb_strobe : out std_logic;
-      do_reply : in std_logic := '0';
+      di_dir0 : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi0 data input register
+      di_strobe0 : in std_logic := '0';                              -- strobe
+      di_reply0 : out std_logic;                                     -- reply
+      di_pgmout0 : out std_logic;                                    -- pgmout
+      di_event0 : out std_logic;                                     -- event
+      di_dir1 : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi1 data input register
+      di_strobe1 : in std_logic := '0';                              -- strobe
+      di_reply1 : out std_logic;                                     -- reply
+      di_pgmout1 : out std_logic;                                    -- pgmout
+      di_event1 : out std_logic;                                     -- event
+      di_dir2 : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi2 data input register
+      di_strobe2 : in std_logic := '0';                              -- strobe
+      di_reply2 : out std_logic;                                     -- reply
+      di_pgmout2 : out std_logic;                                    -- pgmout
+      di_event2 : out std_logic;                                     -- event
+      di_dir3 : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi3 data input register
+      di_strobe3 : in std_logic := '0';                              -- strobe
+      di_reply3 : out std_logic;                                     -- reply
+      di_pgmout3 : out std_logic;                                    -- pgmout
+      di_event3 : out std_logic;                                     -- event
+      do_dor0 : out std_logic_vector(15 downto 0);                   -- mncdo unit 0 data output
+      do_hb_strobe0 : out std_logic;                                 -- mncdo unit 0 high byte strobe
+      do_lb_strobe0 : out std_logic;                                 -- mncdo unit 0 low byte strobe
+      do_reply0 : in std_logic := '0';                               -- mncdo unit 0 reply input
+      do_dor1 : out std_logic_vector(15 downto 0);                   -- mncdo unit 1 data output
+      do_hb_strobe1 : out std_logic;                                 -- mncdo unit 1 high byte strobe
+      do_lb_strobe1 : out std_logic;                                 -- mncdo unit 1 low byte strobe
+      do_reply1 : in std_logic := '0';                               -- mncdo unit 1 reply input
+      do_dor2 : out std_logic_vector(15 downto 0);                   -- mncdo unit 2 data output
+      do_hb_strobe2 : out std_logic;                                 -- mncdo unit 2 high byte strobe
+      do_lb_strobe2 : out std_logic;                                 -- mncdo unit 2 low byte strobe
+      do_reply2 : in std_logic := '0';                               -- mncdo unit 2 reply input
+      do_dor3 : out std_logic_vector(15 downto 0);                   -- mncdo unit 3 data output
+      do_hb_strobe3 : out std_logic;                                 -- mncdo unit 3 high byte strobe
+      do_lb_strobe3 : out std_logic;                                 -- mncdo unit 3 low byte strobe
+      do_reply3 : in std_logic := '0';                               -- mncdo unit 3 reply input
 
 -- cpu console, switches and display register
       have_csdr : in integer range 0 to 1 := 1;
@@ -326,39 +359,6 @@ component paneldriver is
    );
 end component;
 
-component de0adc is
-   port(
-      ad_start : in std_logic;
-      ad_done : out std_logic := '0';
-      ad_channel : in std_logic_vector(5 downto 0);
-      ad_nxc : out std_logic := '0';
-      ad_sample : out std_logic_vector(11 downto 0) := "000000000000";
-
-      adc_cs_n : out std_logic;
-      adc_saddr : out std_logic;
-      adc_sdat : in std_logic;
-      adc_sclk : out std_logic;
-
-      reset : in std_logic;
-      clk50mhz : in std_logic
-   );
-end component;
-
-component pmodda2 is
-   port(
-      da_daca : in std_logic_vector(11 downto 0);
-      da_dacb : in std_logic_vector(11 downto 0);
-
-      da_sync : out std_logic;
-      da_dina : out std_logic;
-      da_dinb : out std_logic;
-      da_sclk : out std_logic;
-
-      reset : in std_logic;
-      clk : in std_logic
-    );
-end component;
-
 component pll is
    port(
       inclk0 : in std_logic := '0';
@@ -392,17 +392,6 @@ signal txtx : std_logic;
 signal rxrx : std_logic;
 signal txtx1 : std_logic;
 signal rxrx1 : std_logic;
-
-signal ad_start : std_logic;
-signal ad_done : std_logic;
-signal ad_channel : std_logic_vector(5 downto 0);
-signal ad_nxc : std_logic;
-signal ad_sample : std_logic_vector(11 downto 0);
-
-signal da_dac1 : std_logic_vector(11 downto 0);
-signal da_dac2 : std_logic_vector(11 downto 0);
-signal da_dac3 : std_logic_vector(11 downto 0);
-signal da_dac4 : std_logic_vector(11 downto 0);
 
 signal have_rl : integer range 0 to 1;
 signal rl_cs : std_logic;
@@ -517,46 +506,10 @@ begin
       c0 => c0
    );
 
-   adc0: de0adc port map(
-      ad_start => ad_start,
-      ad_done => ad_done,
-      ad_channel => ad_channel,
-      ad_nxc => ad_nxc,
-      ad_sample => ad_sample,
-
-      adc_cs_n => adc_cs_n,
-      adc_saddr => adc_saddr,
-      adc_sdat => adc_sdat,
-      adc_sclk => adc_sclk,
-
-      reset => cpureset,
-      clk50mhz => clkin
-   );
-
-   dac0: pmodda2 port map(
-      da_daca => da_dac1,
-      da_dacb => da_dac2,
-
-      da_sync => da_sync0,
-      da_dina => da_dina0,
-      da_dinb => da_dinb0,
-      da_sclk => da_sclk0,
-
-      reset => cpureset,
-      clk => cpuclk
-   );
-
 --   c0 <= clkin;
 
    pdp11: unibus port map(
-      modelcode => 24,
-
-      have_mncad => 1,
-      have_mnckw => 2,
-      have_mncaa => 1,
-      have_mncdi => 1,
-      have_mncdo => 1,
-      have_diloopback => 0, 
+      modelcode => 70,
 
       have_kl11 => 1,
       tx0 => txtx,
@@ -593,22 +546,12 @@ begin
       rh_sdcard_miso => rh_miso,
       rh_sdcard_debug => rh_sddebug,
 
-      have_xu => 0,
+      have_xu => 1,
       xu_cs => xu_cs,
       xu_mosi => xu_mosi,
       xu_sclk => xu_sclk,
       xu_miso => xu_miso,
       xu_debug_tx => xu_debug_tx,
-
-      ad_start => ad_start,
-      ad_done => ad_done,
-      ad_channel => ad_channel,
-      ad_nxc => ad_nxc,
-      ad_sample => ad_sample,
-      da_dac1 => da_dac1,
-      da_dac2 => da_dac2,
-      da_dac3 => da_dac3,
-      da_dac4 => da_dac4,
 
       cons_load => cons_load,
       cons_exa => cons_exa,
@@ -699,7 +642,7 @@ begin
       sample_cycles => sample_cycles,
       minon_cycles => minon_cycles,
 
-		paneltype => 3,
+		paneltype => 1,
 
       clkin => cpuclk,
       reset => reset
@@ -727,7 +670,7 @@ begin
    dram_cke <= '1';
    dram_clk <= c0;
 
-   have_rh <= 0; have_rl <= 0; have_rk <= 1;
+   have_rh <= 1; have_rl <= 0; have_rk <= 0;
 
    process(c0, reset)
    begin

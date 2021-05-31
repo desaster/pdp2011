@@ -4,6 +4,7 @@
 ; boot code taken from http://ak6dn.dyndns.org/PDP-11/M9312/ and modified to work with m9312l47.mac
 ; which does not include diagnostics, does not use the rom code letters.
 ;
+; $Revision$
 
 bit0     =000001              ; plain old bit definitions
 bit1     =000002              ;
@@ -48,22 +49,35 @@ boot:
          mov   #bootrk,r2
          mov   pc,r1
          br    bprtascz
+         clr   @#4
+         clr   @#6
+         clr   r0
          br    rkgo
 ;
 nork:
+         mov   #1000,sp
+         clr   @#6
          mov   #norl,@#4
          tst   @#174400
          mov   #bootrl,r2
          mov   pc,r1
          br    bprtascz
+         clr   @#4
+         clr   @#6
+         clr   r0
          br    rlgo
 ;
 norl:
+         mov   #1000,sp
+         clr   @#6
          mov   #norp,@#4
          tst   @#176700
          mov   #bootrp,r2
          mov   pc,r1
          br    bprtascz
+         clr   @#4
+         clr   @#6
+         clr   r0
          br    rpgo
 ;
 norp:
@@ -89,13 +103,19 @@ cmrdhd    =4*2                ; read header
 cmrdda    =6*2                ; read data
 
 rlgo:    mov   #rlcsr,r1
-         clr   (r1)           ; clear unit number etc
+         mov   r0,r3          ; save unit number
+         swab  r3             ; unit number in upper byte
+         mov   r3,(r1)        ; set unit, NOP cmd
+
          mov   #013,rlda(r1)  ; subcmd reset+getstatus
-         mov   #cmstat,(r1)   ; execute
+         bis   #cmstat,r3     ; get status cmd (r3lo is 0)
+         mov   r3,(r1)        ; execute
 1$:      tstb  (r1)           ; test for ready
          bpl   1$             ; wait
 
-         mov   #cmrdhd,(r1)   ; execute
+         clrb  r3             ; unit number in upper byte
+         bis   #cmrdhd,r3     ; read header cmd
+         mov   r3,(r1)        ; execute
 2$:      tstb  (r1)           ; test for ready
          bpl   2$             ; wait
 
@@ -103,20 +123,24 @@ rlgo:    mov   #rlcsr,r1
          bic   #77,r2         ; set sector to zero
          inc   r2             ; set head 0, seek to cyl 0
          mov   r2,rlda(r1)    ; into da for seek
-         mov   #cmseek,(r1)        ; execute
+         clrb  r3             ; unit number in upper byte
+         bis   #cmseek,r3     ; seek cmd
+         mov   r3,(r1)        ; execute
 3$:      tstb  (r1)           ; test for ready
          bpl   3$             ; wait
 
          clr   rlda(r1)       ; select cyl0/head0/sector0
          mov   #-512.,rlmp(r1)      ; set word count
-         mov   #cmrdda,(r1)        ; execute
+         clrb  r3             ; unit number in upper byte
+         bis   #cmrdda,r3     ; read data cmd
+         mov   r3,(r1)        ; execute
 4$:      tstb  (r1)           ; test for ready
          bpl   4$             ; wait
 
          tst   (r1)           ; test for error
          bpl   5$             ; br if ok
          reset                ; ERROR - reset the world
-         jmp   2(r4)          ; retry
+         br rlgo              ; retry
 
 5$:      bic   #377,(r1)      ; execute nop cmd
          clr   pc             ; jump to bootstrap at zero
@@ -128,6 +152,7 @@ rlgo:    mov   #rlcsr,r1
 rkcsr    =177400              ; std RK03/05 DECdisk csrbase
 
 rkwc     =+6-4                ; word count
+rkba     =+10-4               ; bus address
 rkda     =+12-4               ; disk address
 
 tccsr    =177340              ; std TU55/56 DECtape csrbase
@@ -141,10 +166,18 @@ diags    =165564              ; console diags phase2 entry
 
 
 rkgo:    mov   #rkcsr+4,r1    ; boot std csr, unit <R0>
-         clr rkda(r1)         ; unit number, sector 0 to disk addr
+         clr   rkba(r1)       ; clear bus address
+         mov   r0,r3          ; get unit number
+         clc                  ; C=0 for ror
+         ror   r3             ; shift into 15:12
+         ror   r3             ;
+         ror   r3             ;
+         ror   r3             ;
+         mov   r3,rkda(r1)    ; unit number, sector 0 to disk addr
 
 common:  mov   #-512.,xxwc(r1)   ; set word count
-         mov   #5,(r1)        ; execute READ+GO
+         bis   #5,r3          ; command READ+GO
+         mov   r3,(r1)        ; execute
 2$:      tstb  (r1)           ; test ready
          bpl   2$             ; loop
 
@@ -152,7 +185,7 @@ common:  mov   #-512.,xxwc(r1)   ; set word count
          bpl   3$             ; br if no error
 
          reset                ; reset the world
-         jmp   2(r4)          ; and retry
+         br rkgo              ; and retry
 
 3$:      bic   #377,(r1)      ; nop command
          clr   pc             ; jump to loaded boot sector
@@ -174,14 +207,17 @@ rpof  =+32                    ; offset register offset
 
 rpgo:    mov   #rmcsr,r1      ; boot std csr, unit <R0>
 
-         clr   rpcs2(r1)   ; set unit number into controller
+         mov   r0,rpcs2(r1)   ; set unit number into controller
          mov   #071,r2        ; READ+GO command code
          mov   #021,(r1)      ; RIP+GO command
          mov   #014000,rpof(r1)  ; set 16b mode, inhibit ECC mode
          mov   rpas(r1),rpas(r1) ; clear attention bits
 
          mov   #-512.,rpwc(r1)      ; set word count
-         mov   r2,(r1)        ; execute read command
+         mov   (r1),r3        ; get unit number
+         bic   #377,r3        ; clear command byte
+         bis   r2,r3          ; insert read command code
+         mov   r3,(r1)        ; execute read command
 2$:      tstb  (r1)           ; test unit ready
          bpl   2$             ; br if not yet
 
@@ -189,7 +225,7 @@ rpgo:    mov   #rmcsr,r1      ; boot std csr, unit <R0>
          bpl   3$             ; br if not
 
          reset                ; error, reset the world
-         jmp   2(r4)          ; and jump back to restart
+         br rpgo              ; and jump back to restart
 
 3$:      bic   #377,(r1)      ; nop command, clear controller
          clr   pc             ; jump to bootstrap start
@@ -222,6 +258,7 @@ prtoct:  mov   #<'0/bit1>,r2  ; ascii 0 right 1b
          sec                  ; shift a 1 into R0 lsb as done bit
 1$:      rol   r0             ; msb out of R0
          rolb  r2             ; into lsb of R2
+         mov   pc,r3          ; ret addr
          tstb  @#177564
          bpl   .-4
          movb  r2,@#177566
@@ -249,15 +286,5 @@ nodev:   .ascii <15><12>
          .ascii /boot: no dev/
          .asciz <15><12>
          .even
-
-mincad:  .asciz /mncad/
-minckw:  .asciz /mnckw/
-mincaa:  .asciz /mncaa/
-mincdi:  .asciz /mncdi/
-mincdo:  .asciz /mncdo/
-
-m9312:   .asciz /m9312/
-mdr11c:  .asciz /dr11/
-mlma:    .asciz /lma/
 
    .end

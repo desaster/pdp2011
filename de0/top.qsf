@@ -261,6 +261,14 @@ set_location_assignment PIN_W6 -to xu_miso
 set_location_assignment PIN_T8 -to xu_mosi
 set_location_assignment PIN_W7 -to xu_sclk
 set_location_assignment PIN_Y7 -to xu_debug_tx
+set_global_assignment -name VHDL_FILE ../vtbrt42.vhd
+set_global_assignment -name VHDL_FILE ../vgafont.vhd
+set_global_assignment -name VHDL_FILE ../sdspi.vhd
+set_global_assignment -name VHDL_FILE ../mnckw.vhd
+set_global_assignment -name VHDL_FILE ../mncdo.vhd
+set_global_assignment -name VHDL_FILE ../mncdi.vhd
+set_global_assignment -name VHDL_FILE ../mncad.vhd
+set_global_assignment -name VHDL_FILE ../mncaa.vhd
 set_global_assignment -name VHDL_FILE ../dr11c.vhd
 set_global_assignment -name VHDL_FILE ../panelos.vhd
 set_global_assignment -name VHDL_FILE ../paneldriver.vhd
@@ -273,7 +281,6 @@ set_global_assignment -name VHDL_FILE ../xubl.vhd
 set_global_assignment -name VHDL_FILE ../xu.vhd
 set_global_assignment -name VHDL_FILE ../kl11.vhd
 set_global_assignment -name VHDL_FILE ../rh11.vhd
-set_global_assignment -name VHDL_FILE ../blockramt42.vhd
 set_global_assignment -name VHDL_FILE ../ps2.vhd
 set_global_assignment -name VHDL_FILE ../vga.vhd
 set_global_assignment -name VHDL_FILE ../vgacr.vhd
