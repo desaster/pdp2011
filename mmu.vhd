@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -72,11 +72,11 @@ entity mmu is
       unibus_busmaster_control_datob : in std_logic;
       unibus_busmaster_control_npg : in std_logic;
 
-      cons_exadep : in std_logic;
-      cons_consphy : in std_logic_vector(21 downto 0);
-      cons_adss_mode : in std_logic_vector(1 downto 0);
-      cons_adss_id : in std_logic;
-      cons_adss_cons : in std_logic;
+      cons_exadep : in std_logic := '0';
+      cons_consphy : in std_logic_vector(21 downto 0) := (others => '0');
+      cons_adss_mode : in std_logic_vector(1 downto 0) := (others => '0');
+      cons_adss_id : in std_logic := '0';
+      cons_adss_cons : in std_logic := '0';
       cons_map16 : out std_logic;
       cons_map18 : out std_logic;
       cons_map22 : out std_logic;

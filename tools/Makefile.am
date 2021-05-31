@@ -15,6 +15,7 @@ EXTRA_DIST = $(srcdir)/license $(srcdir)/changes
 ##
 
 bin_PROGRAMS = macro11 dumpobj genblkram sdfmt
+noinst_PROGRAMS = fontconvert
 
 macro11_SOURCES = macro11.c macro11.h \
        mlb.c mlb.h \
@@ -30,4 +31,6 @@ genblkram_SOURCES = genblkram.c \
        rad50.c rad50.h
 
 sdfmt_SOURCES = sdfmt.c
+
+fontconvert_SOURCES = fontconvert.c
 

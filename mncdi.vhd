@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -274,12 +274,11 @@ begin
                         icsr_overrun <= '1';
                      end if;
                      icsr_done <= '1';
-                  else
-                     if (d and sbr) /= "0000000000000000" then
-                        icsr_done <= '1';
-                        icsr_overrun <= '1';
-                     end if;
                   end if;
+               end if;
+               if icsr_stim = '1' and (((d xor ddir) and sbr) /= "0000000000000000") then
+                  icsr_done <= '1';
+                  icsr_overrun <= '1';
                end if;
                if icsr_disinp = '0' then
                   if (icsr_extstrb = '0') or v_strobe = '1' then

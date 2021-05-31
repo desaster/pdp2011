@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -71,7 +71,7 @@ component sdspi is
       sdcard_miso : in std_logic := '0';
       sdcard_debug : out std_logic_vector(3 downto 0);
 
-      sdcard_addr : in std_logic_vector(22 downto 0);
+      sdcard_addr : in std_logic_vector(23 downto 0);
 
       sdcard_idle : out std_logic;
       sdcard_read_start : in std_logic;
@@ -187,7 +187,7 @@ signal wcp : std_logic_vector(15 downto 0);            -- word count, positive
 signal hs_offset : std_logic_vector(16 downto 0);
 signal ca_offset : std_logic_vector(16 downto 0);
 signal dn_offset : std_logic_vector(16 downto 0);
-signal sd_addr : std_logic_vector(22 downto 0);
+signal sd_addr : std_logic_vector(23 downto 0);
 
 signal work_bar : std_logic_vector(17 downto 1);
 
@@ -959,7 +959,7 @@ begin
    ca_offset <= ("00000" & unsigned(rkda_cy) & "0000") + ("000000" & unsigned(rkda_cy) & "000");            -- cyl * 16 + cyl * 8 == cyl * 24
    dn_offset <= ("00" & unsigned(rkda_dr) & "000000000000") + ("000" & unsigned(rkda_dr) & "00000000000");     -- (disk * 16 + disk * 8) << 8
 
-   sd_addr <= "000000" & unsigned(dn_offset) + unsigned(hs_offset) + unsigned(ca_offset) + unsigned(rkda_sc);
+   sd_addr <= "0000000" & unsigned(dn_offset) + unsigned(hs_offset) + unsigned(ca_offset) + unsigned(rkda_sc);
 
 -- busmaster
 

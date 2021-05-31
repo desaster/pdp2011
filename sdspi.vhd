@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -28,7 +28,7 @@ entity sdspi is
       sdcard_miso : in std_logic := '0';
       sdcard_debug : out std_logic_vector(3 downto 0);
 
-      sdcard_addr : in std_logic_vector(22 downto 0);
+      sdcard_addr : in std_logic_vector(23 downto 0);
 
       sdcard_idle : out std_logic;
       sdcard_read_start : in std_logic;
@@ -439,9 +439,9 @@ begin
                         idle <= '0';
                         counter <= 48;
                         if sdhc = '1' then
-                           sd_cmd <= x"51" & "000000000" & sdcard_addr & x"01";
+                           sd_cmd <= x"51" & "00000000" & sdcard_addr & x"01";
                         else
-                           sd_cmd <= x"51" & sdcard_addr & "000000000" & x"FF";
+                           sd_cmd <= x"51" & sdcard_addr(22 downto 0) & "000000000" & x"FF";
                         end if;
                         sd_state <= sd_send_cmd;
                         sd_nextstate <= sd_read_data_waitstart;
@@ -453,9 +453,9 @@ begin
                         idle <= '0';
                         counter <= 48;
                         if sdhc = '1' then
-                           sd_cmd <= x"58" & "000000000" & sdcard_addr & x"01";
+                           sd_cmd <= x"58" & "00000000" & sdcard_addr & x"01";
                         else
-                           sd_cmd <= x"58" & sdcard_addr & "000000000" & x"FF";
+                           sd_cmd <= x"58" & sdcard_addr(22 downto 0) & "000000000" & x"FF";
                         end if;
                         sd_state <= sd_send_cmd;
                         sd_nextstate <= sd_write_checkresponse;

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -224,7 +224,6 @@ begin
 
                   when i_idle =>
                      br <= '0';
-
                      if tx_ie = '1' and tx_rdy = '1' then
                         if tx_trigger = '0' then
                            interrupt_state <= i_req;
@@ -235,44 +234,31 @@ begin
                      else
                         tx_trigger <= '0';
                      end if;
-
                      if rx_ie = '1' and rx_done = '1' then
                         if rx_trigger = '0' then
                            interrupt_state <= i_req;
                            br <= '1';
                            rx_trigger <= '1';
-                           tx_trigger <= '0';                                  -- this turns out to be the big trick in this controller. Since rx and tx share the interrupt structure, the tx interrupt is sometimes masked by the rx events, and thus may lead to a deadlock in the software.
+                           tx_trigger <= '0';
                         end if;
                      else
                         rx_trigger <= '0';
                      end if;
 
                   when i_req =>
-                     if rx_ie = '1' and rx_done = '1' then
-                        if bg = '1' then
-                           int_vector <= ivec;
-                           br <= '0';
-                           interrupt_state <= i_wait;
-                        end if;
-                     elsif tx_ie = '1' and tx_rdy = '1' then
+                     if tx_trigger = '1' then
                         if bg = '1' then
                            int_vector <= ovec;
                            br <= '0';
                            interrupt_state <= i_wait;
                         end if;
                      end if;
-
-                     if rx_trigger = '1' and (rx_ie = '0' or rx_done = '0') then
-                        rx_trigger <= '0';
-                     end if;
-
-                     if tx_trigger = '1' and (tx_ie = '0' or tx_rdy = '0') then
-                        tx_trigger <= '0';
-                     end if;
-
-                     if not ((rx_ie = '1' and rx_done = '1') or (tx_ie = '1' and tx_rdy = '1')) then
-                        br <= '0';
-                        interrupt_state <= i_idle;
+                     if rx_trigger = '1' then
+                        if bg = '1' then
+                           int_vector <= ivec;
+                           br <= '0';
+                           interrupt_state <= i_wait;
+                        end if;
                      end if;
 
                   when i_wait =>
@@ -541,7 +527,7 @@ begin
                               recv_copy <= '1';                                -- so set recv_copy to kick it off and issue the byte to the controller to dispose of
                            end if;
                         end if;
-                        if recv_sample >= samplerate-2 then                    -- stop slightly early, it gives the receiver a bit more slack to start the next byte if the other side is fast.
+                        if recv_sample > minsample-4 and rxf = '1' then        -- allow to stop early, some transmitters don't honour stop bit timing
                            recv_state <= recv_idle;
                         end if;
 

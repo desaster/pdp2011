@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -70,7 +70,7 @@ component sdspi is
       sdcard_miso : in std_logic := '0';
       sdcard_debug : out std_logic_vector(3 downto 0);
 
-      sdcard_addr : in std_logic_vector(22 downto 0);
+      sdcard_addr : in std_logic_vector(23 downto 0);
 
       sdcard_idle : out std_logic;
       sdcard_read_start : in std_logic;
@@ -202,7 +202,7 @@ begin
       sdcard_miso => sdcard_miso,
       sdcard_debug => sdcard_debug,
 
-      sdcard_addr => "00000" & sd_addr,
+      sdcard_addr => "000000" & sd_addr,
 
       sdcard_idle => sdcard_idle,
       sdcard_read_start => sdcard_read_start,

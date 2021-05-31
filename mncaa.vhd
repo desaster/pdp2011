@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -31,10 +31,10 @@ entity mncaa is
       bus_control_dato : in std_logic;
       bus_control_datob : in std_logic;
 
+      da_dac0 : out std_logic_vector(11 downto 0);
       da_dac1 : out std_logic_vector(11 downto 0);
       da_dac2 : out std_logic_vector(11 downto 0);
       da_dac3 : out std_logic_vector(11 downto 0);
-      da_dac4 : out std_logic_vector(11 downto 0);
 
       have_mncaa : in integer range 0 to 1 := 0;
 
@@ -54,10 +54,10 @@ signal base_addr_match : std_logic;
 
 -- logic
 
+signal aadac0 : std_logic_vector(11 downto 0);
 signal aadac1 : std_logic_vector(11 downto 0);
 signal aadac2 : std_logic_vector(11 downto 0);
 signal aadac3 : std_logic_vector(11 downto 0);
-signal aadac4 : std_logic_vector(11 downto 0);
 
 
 begin
@@ -65,10 +65,10 @@ begin
    base_addr_match <= '1' when base_addr(17 downto 3) = bus_addr(17 downto 3) and have_mncaa = 1 else '0';
    bus_addr_match <= base_addr_match;
 
+   da_dac0 <= aadac0;
    da_dac1 <= aadac1;
    da_dac2 <= aadac2;
    da_dac3 <= aadac3;
-   da_dac4 <= aadac4;
 
    process(clk, base_addr_match, reset, have_mncaa)
    begin
@@ -76,22 +76,22 @@ begin
 
          if have_mncaa = 1 then
             if reset = '1' then
+               aadac0 <= (others => '0');
                aadac1 <= (others => '0');
                aadac2 <= (others => '0');
                aadac3 <= (others => '0');
-               aadac4 <= (others => '0');
             else
 
                if base_addr_match = '1' and bus_control_dati = '1' then
                   case bus_addr(2 downto 1) is
                      when "00" =>
-                        bus_dati <= "0000" & aadac1;
+                        bus_dati <= "0000" & aadac0;
                      when "01" =>
-                        bus_dati <= "0000" & aadac2;
+                        bus_dati <= "0000" & aadac1;
                      when "10" =>
-                        bus_dati <= "0000" & aadac3;
+                        bus_dati <= "0000" & aadac2;
                      when "11" =>
-                        bus_dati <= "0000" & aadac4;
+                        bus_dati <= "0000" & aadac3;
                      when others =>
                         null;
                   end case;
@@ -102,13 +102,13 @@ begin
                   if bus_control_datob = '0' or (bus_control_datob = '1' and bus_addr(0) = '0') then
                      case bus_addr(2 downto 1) is
                         when "00" =>
-                           aadac1(7 downto 0) <= bus_dato(7 downto 0);
+                           aadac0(7 downto 0) <= bus_dato(7 downto 0);
                         when "01" =>
-                           aadac2(7 downto 0) <= bus_dato(7 downto 0);
+                           aadac1(7 downto 0) <= bus_dato(7 downto 0);
                         when "10" =>
-                           aadac3(7 downto 0) <= bus_dato(7 downto 0);
+                           aadac2(7 downto 0) <= bus_dato(7 downto 0);
                         when "11" =>
-                           aadac4(7 downto 0) <= bus_dato(7 downto 0);
+                           aadac3(7 downto 0) <= bus_dato(7 downto 0);
                         when others =>
                            null;
                      end case;
@@ -116,13 +116,13 @@ begin
                   if bus_control_datob = '0' or (bus_control_datob = '1' and bus_addr(0) = '1') then
                      case bus_addr(2 downto 1) is
                         when "00" =>
-                           aadac1(11 downto 8) <= bus_dato(11 downto 8);
+                           aadac0(11 downto 8) <= bus_dato(11 downto 8);
                         when "01" =>
-                           aadac2(11 downto 8) <= bus_dato(11 downto 8);
+                           aadac1(11 downto 8) <= bus_dato(11 downto 8);
                         when "10" =>
-                           aadac3(11 downto 8) <= bus_dato(11 downto 8);
+                           aadac2(11 downto 8) <= bus_dato(11 downto 8);
                         when "11" =>
-                           aadac4(11 downto 8) <= bus_dato(11 downto 8);
+                           aadac3(11 downto 8) <= bus_dato(11 downto 8);
                         when others =>
                            null;
                      end case;

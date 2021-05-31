@@ -1,4 +1,938 @@
 
+5/24
+- finally managed to get a 2040 cylinder rm06 working for rsx,
+  probably mostly through mistakes and uncooperative hardware
+  and software. BRU does not accept the line below when the
+  drive is 2040 cyls instead of 1024 - probably a buffer overflow
+  or something. The error message is:
+BRU -- *FATAL* -- Output disk too fragmented to restore
+  /mou/ini/max:20956 du0: db0: works though, and produces a working
+  disk.
+  As before, anything over 2**32 will not work with simh - there
+  seem to be many more issues than I thought at first. For instance,
+  disabling autosize does not block volume interpretation, and that
+  also seems to use 32 bits.
+  I could maybe test with larger volumes by adding a 2nd controller
+  though. Should try to find some more info about BRU first though.
+
+  Anyway this:
+
+>pip/fr
+
+DB0: has 4035703. blocks free, 142217. blocks used out of 4177920.
+Largest contiguous space = 2084722. blocks
+17905. file headers are free, 3051. headers used out of 20956.
+
+>dev db0:/full
+DB0:     Public Mounted Loaded Label=RSX11MPBL87 Type=RM06
+         Seek_Optimization=Nearest:10. Overlapped_Seeks
+         Free_blocks=4035702. Trans_count=2.
+
+>con dis full att for db
+DB0:    RHA0:   Online,Massbus,Accpath,Context,Driver,Type=RM06
+
+
+5/19
+- did a bit more testing with big volumes for rsx. Bigger than
+  2GB (or rather: more than 2**32 signed integer worth of bytes)
+  is a problem, since there are 32 bit signed integers in simh.
+  Should not be a problem for pdp2011, but not able to verify.
+- /mou/ini/extend:127/max:65500/hea:65500 du0: db0: is a better
+  way of running bru, it seems.
+
+
+5/17
+- added rm06 support, esp. for rsx-11mplus. Seems to work fine.
+>pip/fr
+
+DB0: has 1948163. blocks free, 148989. blocks used out of 2097152.
+Largest contiguous space = 1037559. blocks
+17907. file headers are free, 3049. headers used out of 20956.
+
+
+5/14
+- checked rh for larger disks and did some experiments with
+  modified rp disk types across simh and rh11.vhd. Sure, that
+  works.
+  1) check the disk geometry in simh/PDP11/pdp11_rp.c
+  2) make sure the sector calculation in rh11 is correct
+  3) install 2.11bsd
+  4) check the geometry stuff in mdec/hpuboot.s
+- added a new rp type=2 for 64 sectors, 64 surfaces. Makes for
+  a very easy sector calculation... 2 stands for 2Gb, sort-of.
+  The idea to use 64/64/1024 comes from some masking in simh,
+  not sure if any of that is actually necessary - but it is
+  easier to leave it in place, and the result is big enough for
+  now. The same principle would work the same for 256/256/x
+  probably - not quite sure yet if the changes in the boot
+  sector for 211bsd would be equally trivial.
+- added the sector calculator for rp07 - that wasn't actually
+  there yet, oops.
+- yes, there is a new image based on rp07. And there will be one
+  for rp2g too, but not sure of the slice layout yet.
+- a thing to remember... the new ansified c compiler is a lot
+  slower to compile the kernel, so keep that in mind when comparing
+  old and new kernel compile times.
+
+5/9
+- because why not... extended the number of analog channels to
+  64 - the maximum. This means the Minc is now the biggest
+  possible ever :-)
+.R VMNF??
+VMNFC0.BIC
+
+MD-11-CVMNF-C   MINC-11 OPTION SIZER PROGRAM
+
+DO YOU WANT THE MNCAD (A/D) CHANNEL MODE REPORT ?
+                TYPE "Y" FOR YES =
+DO YOU WANT THE MEMORY USAGE MAP REPORT ?
+                TYPE "Y" FOR YES =
+  ;MNCAD AT ADDRESS = 171000   VECTOR = 400
+                 0 -  7 SINGLE ENDED
+                10 - 17 SINGLE ENDED
+                20 - 27 SINGLE ENDED
+                30 - 37 SINGLE ENDED
+                40 - 47 SINGLE ENDED
+                50 - 57 SINGLE ENDED
+                60 - 67 SINGLE ENDED
+                70 - 77 SINGLE ENDED
+
+  ;MNCKW AT ADDRESS = 171020   VECTOR = 440
+  ;MNCKW AT ADDRESS = 171024   VECTOR = 450
+  ;MNCAA AT ADDRESS = 171060   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171070   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171100   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171110   VECTOR =  **  DOES NOT EXIST **
+  ;MNCDI AT ADDRESS = 171160   VECTOR = 120
+  ;MNCDI AT ADDRESS = 171170   VECTOR = 130
+  ;MNCDI AT ADDRESS = 171200   VECTOR = 140
+  ;MNCDI AT ADDRESS = 171210   VECTOR = 150
+  ;MNCDO AT ADDRESS = 171260   VECTOR = 340
+  ;MNCDO AT ADDRESS = 171264   VECTOR = 344
+  ;MNCDO AT ADDRESS = 171270   VECTOR = 350
+  ;MNCDO AT ADDRESS = 171274   VECTOR = 354
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+MINC-11 MEMORY USAGE MAP        (EACH BIT = 2 ADDRESSES)
+ ADDR       000/400          100/500          200/600          300/700
+170000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+170400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+171000 1000110000001111 1111000000001111 1111000000001111 0000000000000000
+171400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+172000 0000000000000000 0000000000000000 0000000000000000 1111000011110000
+172400 0000000000000000 0001000000000000 0000000000000000 0000000000000000
+173000 1111111111111111 1111111111111111 1111111111111111 1111111111111111
+173400 1111111111111111 1111111111111111 1111111111111111 1111111111111111
+174000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+174400 1100000000000000 0000000000000000 0000000000000000 0000000000000000
+175000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+175400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+176000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+176400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+177000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+177400 0000000000000000 0000000001001111 1111000011110000 0000000100000101
+
+END PASS #     1
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+END PASS #     2
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+END PASS #     3
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+END PASS #     4
+
+
+And also this, of course:
+.C MNC11
+
+R VMNF??/1
+
+MD-11-CVMNF-C   MINC-11 OPTION SIZER PROGRAM
+
+
+OPERATOR        -       PLEASE DO THE FOLLOWING:
+
+REMOVE THE CUSTOMER CONNECTIONS FROM EACH "MINC-11" OPTION
+MNCAD (A/D)             SET FRONT PANEL SWITCHES TO THE "TEST" POSITION
+MNCAG (PREAMP)          SET FRONT PANEL SWITCHES TO THE "P" POSITION
+MNCKW (CLOCK)           PULL OUT "ST1" AND "ST2" SWITCHES
+                        AND ROTATE FULLY CLOCKWISE
+MNCDI (DIGITAL IN)      SET "DATA" SWITCH TO THE "-" POSITION
+SLU 0                   INSTALL "SLU TEST CONNECTOR"
+SLU 1                   INSTALL "SLU TEST CONNECTOR"
+SLU 2                   INSTALL "SLU TEST CONNECTOR"
+
+DEPRESS A KEY ON THE CONSOLE TERMINAL WHEN READY.
+  ;MNCAD AT ADDRESS = 171000   VECTOR = 400
+  ;MNCKW AT ADDRESS = 171020   VECTOR = 440
+  ;MNCKW AT ADDRESS = 171024   VECTOR = 450
+  ;MNCAA AT ADDRESS = 171060   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171070   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171100   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171110   VECTOR =  **  DOES NOT EXIST **
+  ;MNCDI AT ADDRESS = 171160   VECTOR = 120
+  ;MNCDI AT ADDRESS = 171170   VECTOR = 130
+  ;MNCDI AT ADDRESS = 171200   VECTOR = 140
+  ;MNCDI AT ADDRESS = 171210   VECTOR = 150
+  ;MNCDO AT ADDRESS = 171260   VECTOR = 340
+  ;MNCDO AT ADDRESS = 171264   VECTOR = 344
+  ;MNCDO AT ADDRESS = 171270   VECTOR = 350
+  ;MNCDO AT ADDRESS = 171274   VECTOR = 354
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+END PASS #     1R VMNC??/1
+
+CVMNC-B MNCKW (CLOCK) DIAGNOSTIC
+
+PROGRAM DETECTED      2 MNCKW (CLOCK)'S  �
+END PASS #     1R VMNB??/1
+
+CVMNB-B MNCDI (DIGITAL IN) DIAGNOSTIC
+
+PROGRAM DETECTED     4 MNCDI (DIGITAL IN)'S  �
+END PASS #     1R VMNE??/1
+
+CVMNE-A MNCDO (DIGIAL OUT) DIAGNOSTIC
+
+PROGRAM DETECTED      4 MNCDO (DIGITAL OUT)'S  �
+END PASS #     1R VMND??/1
+
+CVMND-A  MNCAA (D/A) DIAGNOSTIC
+
+PROGRAM DETECTED      4 MNCAA (D/A)'S
+END PASS #     1R VMNA??/1
+
+CVMNA-C    MNCAD (A/D) DIAGNOSTIC
+
+PROGRAM DETECTED      1 MNCAD (A/D)'S
+
+END PASS #     1R VMNG??/1
+
+CVMNG-A MINC-11 CHAIN TERMINATOR PROGRAM
+
+
+OPERATOR  -    THE AUTOMATIC RUNNING OF THE DIAGNOSTICS HAS NOW BEEN COMPLETED
+
+
+.
+
+
+5/6
+- last night's fix introduced another bug, should be fixed
+  now - verified all of vttest.
+- added DECTCEM - set/reset mode to hide cursor display
+- recoded set/reset mode logic so that it can now process
+  multiple set/resets in one message. Not entirely compliant,
+  because it will accept DEC private and ANSI in one message
+  too.
+- and extended the ad multiplexer for de0n a bit:
+.R VMNF??
+VMNFC0.BIC
+
+MD-11-CVMNF-C   MINC-11 OPTION SIZER PROGRAM
+
+DO YOU WANT THE MNCAD (A/D) CHANNEL MODE REPORT ?
+                TYPE "Y" FOR YES =
+DO YOU WANT THE MEMORY USAGE MAP REPORT ?
+                TYPE "Y" FOR YES =
+  ;MNCAD AT ADDRESS = 171000   VECTOR = 400
+                 0 -  7 SINGLE ENDED
+                10 - 17 SINGLE ENDED
+                20 - 27 SINGLE ENDED
+                30 - 37 SINGLE ENDED
+
+  ;MNCKW AT ADDRESS = 171020   VECTOR = 440
+  ;MNCKW AT ADDRESS = 171024   VECTOR = 450
+  ;MNCAA AT ADDRESS = 171060   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171070   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171100   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171110   VECTOR =  **  DOES NOT EXIST **
+  ;MNCDI AT ADDRESS = 171160   VECTOR = 120
+  ;MNCDI AT ADDRESS = 171170   VECTOR = 130
+  ;MNCDI AT ADDRESS = 171200   VECTOR = 140
+  ;MNCDI AT ADDRESS = 171210   VECTOR = 150
+  ;MNCDO AT ADDRESS = 171260   VECTOR = 340
+  ;MNCDO AT ADDRESS = 171264   VECTOR = 344
+  ;MNCDO AT ADDRESS = 171270   VECTOR = 350
+  ;MNCDO AT ADDRESS = 171274   VECTOR = 354
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+MINC-11 MEMORY USAGE MAP        (EACH BIT = 2 ADDRESSES)
+ ADDR       000/400          100/500          200/600          300/700
+170000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+170400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+171000 1000110000001111 1111000000001111 1111000000001111 0000000000000000
+171400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+172000 0000000000000000 0000000000000000 0000000000000000 1111000011110000
+172400 0000000000000000 0001000000000000 0000000000000000 0000000000000000
+173000 1111111111111111 1111111111111111 1111111111111111 1111111111111111
+173400 1111111111111111 1111111111111111 1111111111111111 1111111111111111
+174000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+174400 1100000000000000 0000000000000000 0000000000000000 0000000000000000
+175000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+175400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+176000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+176400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+177000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+177400 0000000000000000 0000000001001111 1111000011110000 0000000100000101
+
+END PASS #     1
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+
+
+5/5
+- added clearing double bits on csi upper j. Not sure it is
+  completely correct, the manual mentions 'for all completely
+  erased lines'...
+- added setting cursor and clearing second half of line on
+  changing to double
+- added tab processing for double
+- added scrolling. Now passes vttest except the amount of
+  scrolling is not correct - but that is maybe due to the
+  use of decom in the test. Ah yes - found it, RI did not
+  handle DECOM correctly.
+
+
+5/4
+- finished adding the first working version of double
+  width/double height characters to the vt. Works mostly,
+  some ironing out to do with line ending/lcf at 40 columns,
+  and clearing the double bits on erasing partial screens
+  and moving them on scrolling.
+
+
+5/1
+- added manual xoff-xon to vtbrt42, not with a dedicated
+  key (yet) but just so that the automatic stuff will not
+  interfere with the user typing control-s.
+
+
+4/30
+- worked (again, I should say) on pmodaqs. I don't get that
+  chip, it seems to work against me every step of the way.
+  Seriously considering dropping it - not so much from
+  support, because it isn't - but rather in the bin. Life's
+  too short for clock stretching.
+- added CSI 3 J, on suggestion of Steve Falco.
+- extended CSI m to handle vt200 and later resetting of
+  attributes. This was an annoying bug that would leave
+  reverse video on, for instance after looking at a man
+  page, and the only way to get rid of it would be a reset.
+
+
+4/29
+- fixed a bug that would cause the vtbrt42 receiver code
+  to get stuck on a buffer overrun.
+- added automatic xon/xoff to vtbrt42. Seems to work well,
+  tested as terminal on linux up to 115200 bps.
+- attempted fix for short stop bit - as for instance with
+  ftdi cables, maybe especially with Linux drivers.
+
+
+4/27
+- changed the logic in mncdi for detecting change - the old
+  logic seemed wrong and would only detect changes towards
+  set bits. Both the old and the new flawlessly passed
+  all tests. At least, after I
+- added loopback capability for all mncdo/mncdi pairs.
+
+
+4/26
+- added up to 4 mncdi. And, of course, ran vmnf with the
+  full config. Note the gap in the mncdi vectors, because
+  rl is in the way.
+- and, seeing the vmnb messages, decided to renumber all
+  mncdi to 120/130/140/150. That passes without error. Not
+  sure why I started from 130 - maybe that bit of documentation
+  was wrong. The only thing I can find at this moment is the
+  source of xmnb, maybe the vector was updated later on.
+  seems to work fine with the new vectors, need to verify with
+  actual data later.
+
+.R VMNF??
+VMNFC0.BIC
+
+MD-11-CVMNF-C   MINC-11 OPTION SIZER PROGRAM
+
+DO YOU WANT THE MNCAD (A/D) CHANNEL MODE REPORT ?
+                TYPE "Y" FOR YES =
+DO YOU WANT THE MEMORY USAGE MAP REPORT ?
+                TYPE "Y" FOR YES =
+  ;MNCAD AT ADDRESS = 171000   VECTOR = 400
+                 0 -  7 SINGLE ENDED
+                10 - 17 SINGLE ENDED
+
+  ;MNCKW AT ADDRESS = 171020   VECTOR = 440
+  ;MNCKW AT ADDRESS = 171024   VECTOR = 450
+  ;MNCAA AT ADDRESS = 171060   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171070   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171100   VECTOR =  **  DOES NOT EXIST **
+  ;MNCAA AT ADDRESS = 171110   VECTOR =  **  DOES NOT EXIST **
+  ;MNCDI AT ADDRESS = 171160   VECTOR = 130
+  ;MNCDI AT ADDRESS = 171170   VECTOR = 140
+  ;MNCDI AT ADDRESS = 171200   VECTOR = 150
+  ;MNCDI AT ADDRESS = 171210   VECTOR = 170
+  ;MNCDO AT ADDRESS = 171260   VECTOR = 340
+  ;MNCDO AT ADDRESS = 171264   VECTOR = 344
+  ;MNCDO AT ADDRESS = 171270   VECTOR = 350
+  ;MNCDO AT ADDRESS = 171274   VECTOR = 354
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+MINC-11 MEMORY USAGE MAP        (EACH BIT = 2 ADDRESSES)
+ ADDR       000/400          100/500          200/600          300/700
+170000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+170400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+171000 1000110000001111 1111000000001111 1111000000001111 0000000000000000
+171400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+172000 0000000000000000 0000000000000000 0000000000000000 1111000011110000
+172400 0000000000000000 0001000000000000 0000000000000000 0000000000000000
+173000 1111111111111111 1111111111111111 1111111111111111 1111111111111111
+173400 1111111111111111 1111111111111111 1111111111111111 1111111111111111
+174000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+174400 1100000000000000 0000000000000000 0000000000000000 0000000000000000
+175000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+175400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+176000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+176400 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+177000 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+177400 0000000000000000 0000000001001111 1111000011110000 0000000100000101
+
+END PASS #     1
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+END PASS #     2
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+END PASS #     3
+# OF   ;MNCAD 1  ;MNCKW  2  ;MNCAA  4  ;MNCDI  4  ;MNCDO  4
+END PASS #     4
+
+but also:
+.R VMNB??
+VMNBB0.BIC
+
+CVMNB-B MNCDI (DIGITAL IN) DIAGNOSTIC
+
+ENSURE MNCDI (DIGITAL IN) DATA SWITCH IS IN THE "-" POSITION
+
+L = LOGIC TEST WITH OR WITHOUT TEST MODULE CONNECTED
+W = WRAPAROUND LOGIC TEST WITH MNCDO CONNECTED TO MNCDI
+T = TYPEOUT LOOP FOR MNCDI TEST MODULE SWITCHES
+G = GET NEW SWITCH REGISTER VALUE
+B = (DIGITAL IN) BASE OR VECTOR ADDRESS CHANGES
+O = (DIGITAL OUT) BASE ADDRESS CHANGE
+H = HELP THE OPERATOR AND RETYPE THIS LIST
+TYPE THE "TEST CHARACTER" THEN DEPRESS "RETURN KEY"  L
+
+PROGRAM DETECTED     4 MNCDI (DIGITAL IN)'S  �
+MNCDI (DIGITAL IN) UNIT #     0
+EXPECTED INTERRUPT AT 120 RECEIVED INTERRUPT AT 130
+PLEASE CHECK VECTOR SWITCHES
+        RESTARTING LOGIC TES�
+MNCDI (DIGITAL IN) UNIT #     1
+EXPECTED INTERRUPT AT 130 RECEIVED INTERRUPT AT 140
+PLEASE CHECK VECTOR SWITCHES
+        RESTARTING LOGIC TES�
+MNCDI (DIGITAL IN) UNIT #     2
+EXPECTED INTERRUPT AT 140 RECEIVED INTERRUPT AT 150
+PLEASE CHECK VECTOR SWITCHES
+        RESTARTING LOGIC TES�
+MNCDI (DIGITAL IN) UNIT #     3
+EXPECTED INTERRUPT AT 150 RECEIVED INTERRUPT AT 170
+PLEASE CHECK VECTOR SWITCHES
+        RESTARTING LOGIC TEST
+
+
+
+4/25
+- added up to 4 mncdo units to unibus - and yes, with the
+  current test config of 2 kw, 2 aa, 1 ad, 1 di, and 4 do
+  that is already beyond what a real minc could have :-)
+
+
+4/16
+- added a second mncaa to the unibus structure
+- changed mncaa channel numbering to match minc basic
+- further expanded the unibus structure to 4 mncaa
+
+
+4/15
+- added pmodda4 driver - took a bit of effort, made a lot of
+  mistakes in the first go (and it didn't help that the
+  default is to use an external reference and there is no such
+  thing on the pmod... ah, yes, manual...)
+- made some subtle changes to the other drivers too. Not started
+  on the grand numbering scheme for the channels yet - still need
+  some more time to think on what makes sense.
+- which pmods are left to add:
+  ad1 - if nothing else, because I already have one, and besides,
+        it'd be nice to run on boards that have no ad at all.
+  als - probably not, color is much more interesting so I don't
+        really see the point. Only 8-bits too.
+  aqs - definitely. Weird sensor though, and the documentation
+        is very brief on exactly what is measured. Not on stock
+        currently though.
+  cmps2 - probably not, nav is more capable
+  da1 - no, only 8 bit so da2 is better
+  da3 - no, nice chip - but 16 bit resolution doesn't make sense
+        for minc, and neither does single channel.
+  dpg1 - differential pressure gauge - not sure. Seems like a
+        nice chip, but I'm struggling to see how I would use the
+        thing.
+  dpot - probably not, if only because of the low (8-bit)
+        resolution. Also, it would be a DA device, and it'd be
+        a pain to integrate. Much more elegant to have the output
+        be voltages only?
+  gyro - probably not, nav is more capable
+  ia -  probably not, because it is obsolete. Shame, it seems
+        interesting, and it nicely fits minc at 12 bits too.
+        Maybe check other sources for AD5933 based boards.
+  isns20 - definitely. 20A mains power, mouhahaha
+  jstk, jstk2 - dunno, maybe. Might be nice.
+  rtcc - not as a minc sensor, but yes, definitely. Would be nice
+        to build a TOY clock out of this thing.
+  sf[1-3] - no, but if I'm ever going to have a minc peripheral
+        board assembled, it would be a great idea to have one of
+        these chips on for a permanent disk instead of sd cards.
+  tc1 - probably not, not sure I see the point of this measurement
+        range, and regular temp range is well covered. Definitely
+        possible though.
+  tmp2 - probably not, pmodhygro is more interesting
+  tmp3 - same
+  tof - dunno, maybe. The chip doesn't seem nice, and I'm not sure
+        of a use case that would fit minc.
+
+
+4/12
+- added the rest of the pmodnav signals. Also the low bits of
+  the pressure sensor - that actually shows when I lift the
+  board up by an arm's length ;-)
+- also slowed down gathering the measurements a bit - now at
+  something like 76Hz, assuming 10MHz at the cpu.
+
+
+4/11
+- added driver for the adxl345 chip on de0nano. Not finished
+  by a long shot, but there's a start and updates are coming
+  in.
+
+
+4/10
+- the pressure sensor is still giving some headaches about
+  initializing properly. The latest thing is to try to give
+  it some time to boot after power comes on.
+- the thing seems to be about setting the i2c interface
+  disabled? weird. Not sure that's right, but it seems to work
+  for now.
+- adding the acceleration sensor bits on pmodnav. Not sure
+  what to do with the outputs though - bit short on analog
+  channels ;-) and then there's the gyro and magnetics to
+  be added too. And maybe the accelerometer thingie on the
+  de0nano itself too.
+
+
+4/9
+- added the temp and pressure measurements from pmodnav,
+  not added the gyro/accel/magnetic chip yet.
+
+
+4/7
+- changed gain to 16x (from 60x). Now waiting for direct
+  sunlight.
+- added co and hg to de10l build.
+- changed pmod modules to full names
+
+
+4/6
+- added gain setting to pmodco, testing with experimental
+  basic program to calculate the color temperature from
+  the reading. See how that works in daylight tomorrow.
+10 AIN(,C%,,0,10,1)
+20 AIN(,R%,,0,11,1)
+30 AIN(,G%,,0,12,1)
+40 AIN(,B%,,0,13,1)
+50 C%=C%+2048
+60 R%=R%+2048
+70 G%=G%+2048
+80 B%=B%+2048
+90 X=(-.14282*R%)+(1.54924*G%)+(-.95641*B%)
+100 Y=(-.32466*R%)+(1.57837*G%)+(-.73191*B%)
+110 Z=(-.68202*R%)+(.77073*G%)+(.56332*B%)
+120 C=0
+130 U=X+Y+Z
+140 IF U<1.00000E-03 THEN 190
+150 V=X/U
+160 W=Y/U
+170 N=(V-.332)/(.1858-W)
+180 C=(449*N*N*N)+(3525*N*N)+(6823.3*N)+5520.33
+190 PRINT C,C%,R%,G%,B%
+200 PAUSE(1)
+210 GO TO 10
+
+
+4/5
+- added pmodcolor (pmodco). Needs some work about the timing
+  and maybe gain as well, check tomorrow in daylight ;-)
+
+
+4/4
+- added pmodhygro (pmodhg). Still somewhat experimental,
+  however, the way the measurements are brought to the
+  adc component is probably how it is going to work. Maybe
+  the channel numbers need to change, not sure yet. There'll
+  be a few more like barometric pressure and maybe gravity,
+  magnetic field. Shame I didn't keep my anemometers...
+
+
+4/2
+- completed a case statement in cr that would not compile
+  nicely on modelsim; reported by Steve Falco
+
+
+3/10
+- fixed issue where the vt would output a space instead
+  of the input character when scrolling from dolcf; most
+  likely when the cursor is in pos 24,80
+
+
+2/26
+- changed switch setup for minc-de10l, now is as follows:
+  sw6 - amber screen
+  sw5 - white screen
+  sw4 - when set, screen saver is stopped by serial activity
+  sw3 - drive entire vga screen for alignment
+  sw2 - drive capital E on screen for alignment
+  sw1 - blink cursor
+  sw0 - underline cursor
+
+
+2/18
+- confirmed, sort of, that there is a bug in the
+  minc software. If the date and time is not set
+  on a system, and it is up for more than 24 hours,
+  it will hang upon the list command. Solution: set
+  date and time. On the original systems this would
+  be forced by the start up routine.
+
+
+2/8
+- redid the setup for de0cv and verified incl xu
+- de0n done
+- cons-de0n-basic done
+- adding new board dir for minc-de0n, and also another
+  dir for additional non-board-specific minc stuff like
+  for pmods, other hardware.
+
+
+2/7
+- did a test run of 2.11bsd kernel compile on the
+  latest build on de0cv @ 100Mhz/14. Comes out at
+  2295 real, 1592 user, 331 sys. That seems slow?
+  Need to investigate.
+  -- Ah yes, the old numbers were of the old kernel
+  and C compiler. That explains just about everything.
+
+
+2/5
+- redid the setup for de0; it is now a 11/45 with
+  rk or rl, switchable with sw0; with vt100.
+- did a bit of rework on the vt105 graphics stuff,
+  the core was quite big because the graph marker
+  and line memories did not infer. Needed some help,
+  including taking those 4 together including lots of
+  bit manipulation for getting in and out. But, the
+  vga component now uses 462 instead of 4902 logic
+  cells (in cyclone-ii). Makes a bit of difference,
+  probably enough that de0 and de1 can run complete
+  minc systems...
+
+
+2/4
+- finally got the font rom to infer. The trick apparently
+  is that the size has to be a power of 2. Grrrrr.
+
+
+2/2
+- some nitpicking to get the right control key to work.
+- the control-[,control-|,control-] don't work yet,
+  check that tomorrow.
+
+
+1/28
+- added auto-poweroff to the terminal; configurable
+  number of seconds, and cancelled on keyboard
+  activity or keyboard+serial port activity.
+
+
+1/27
+- redid yesterdays fix for the scroll area, it didn't
+  work well with vttest. Does now. Could be a couple
+  other issues around decom on/off.
+
+
+1/26
+- fixed an old bug in m9312h47 (and h48) that emerged
+  by the minc restart command. The rkba wasn't initialized
+  on boot, so unless directly after a reset this could
+  produce weird results.
+- changed a bit about the row calculation in lcf to address
+  an issue with the scroll window not working properly,
+  it works but probably the whole row housekeeping should
+  be changed into separate logical and absolute numbers.
+
+
+1/24
+- reverted the m9312 47 to pre-minc, and added a dedicated
+  minc bootstrap that only prints the specific minc stuff;
+  that means no need to also put the minc stuff in 47 and
+  thereby fixes the space problems there.
+
+
+1/22
+- spent a lot of time investigating if I now have both
+  first and last values in the graph. But, as it turns
+  out, the 511th value in the graph is not displayed - at
+  least not in a regular graph.
+- removed the debugging from the vt microcode.
+
+
+1/21
+- changed the update of the graph control register in
+  vt105 to no longer temporary clear bits. Doing that
+  messed up the ain('display') graphics.
+- made some subtle changes to the graph display start
+  and end conditions for graph_col so that the last
+  value is no longer visible in the first row and vice
+  versa.
+
+
+1/20
+- fixed the last value issue in vt
+- the stcfi issue is confirmed to have also fixed the
+  issue with weird characters in the graph labels.
+- added white and amber colour to the vt. The amber
+  needs a bit more tuning still - within what is possible
+  with 4-bit rgb.
+- found a new issue - ain('display') as in addem.bas
+  has a lot of ghosting. Don't really get why yet.
+
+
+1/19
+- fixed the autorange issue in minc. What it was: the
+  stc(f|d)(i|l) instruction would, in the f/i mode, do
+  the conversion to 2's complement for 32 bit integers,
+  instead of 15 bit integers. With the not-plus-one
+  operation then done in the wrong place of the bit array,
+  this would result in a off-by-one result from the stcfi
+  operation. Other forms of the instruction were not
+  affected, and neither were positive values of stcfi.
+
+
+1/18
+List of known issues in MINC:
++ start_timer should reset the timer; see t6quiz - fixed
++ autoranging in graph does not work - fixed
++ grid labels sometimes have wrong characters - probably fixed
+  together with autoranging
++ if the minc rt-11 image has been generated without timer
+  support, several primitives (pause etc) will hang
++ last value now displays as first in regular? graphs
+
+
+1/17
+- finished up the keyboard work in the vt.
+- merged the vt branch into master
+- added dedicated minc-in-one board dir for de10l
+
+
+1/16
+- changed the vt code to use byte variables where reasonable -
+  as in, everything that isn't used in add or sub instructions.
+  And moved all writable data under 1000oct, and changed the
+  t2 template to make everything above that readonly.
+
+
+1/14
+- added vt102 DCH, IL, DL, and Insert-Replace mode. Not strictly
+  necessary, and formally not part of a vt100 or vt105, but it gets
+  things closer to vt220 and that would let the terminal work with
+  Linux too.
+- fixed the pixel-1 issue in strip charts
+
+
+1/13
+- added blinking and underline to cursor
+- improved vt100/vt105 configuration; leave graphics hardware
+  out for vt100
+- added vt52 mode
+
+
+1/12
+- found a rather silly mistake in the graphics parser - if
+  the 2nd of 3 characters was a zero, then the parser would
+  ignore it - and thus get out of sequence after that. This
+  explains all the issues with the h- and v-lines, and the
+  repeated brands as well. Things look a lot closer to what
+  is in the book now. And XXDP ZVTN now looks more convincing
+  too ;-)
+
+
+1/7
+- checked with the terminal connected to simh running a minc
+  image. That seems to fix the scaling issue - so that is a
+  definite clue that something might be wrong in the hardware.
+  simh doesn't do everything correct though... the weird
+  lines thing, is still there for instance.
+- added strip charts. Seems to work quite nicely.
+
+1/6
+- reworked the font rom - already yesterday. It now has all
+  the graphic characters, the pound sign, and it is half the
+  size of the original one because all the special chars are
+  now mapped in the low 0-31 range that wasn't really used.
+  Maybe a bit limiting for later expansion into later terminal
+  models, but, it saves a lot of space. And I never liked
+  national character sets much anyway.
+- the font is now integrated into the build system and under
+  version management.
+- added shading to the graphics stuff. In some cases it looks
+  spectacular, in others, not so much. And the autorange and
+  hline/vline bugs are still there. Will try to setup another
+  rig with a different minc system tomorrow.
+- some minor fixes in the regular vt code to address the label
+  issue - cr didn't do a line feed when outside of a scroll
+  region; stbm didn't properly parse parameters, and did not
+  properly reset the cursor address when reverting to defaults.
+  might still need to check that last one.
+- added the reset functions
+
+
+1/4
+- did some more debugging. The h- and vline thing really looks
+  like a bug or maybe a warning sign that the screen potentially
+  has stale data on it. Weird.
+- reorganized the control registers somewhat, in anticipation of
+  adding the shade line values to the vgacr.
+
+
+1/3
+- added the control registers. No real progress on the remaining
+  weirdness, but some new debugging might shed some light on that
+  soon. One idea is to just clear the h- and vline buffers if
+  the h- and v- runs are over a reasonable length ;-)
+
+
+1/2
+- sort of a major breakthrough : as it turns out, many of the
+  stranger things were actually caused by that the minc thinks
+  the terminal is not in it's initial state and tries to get it
+  there. Doing all sorts of weird writes of lines and things in
+  the process. But neatly doing a display_clear every now and
+  then helps a lot. Got the horizontal lines and graph0 data
+  and markers sort-of working now. Scaling is still weird though.
+
+
+1/1/2021
+- getting a bit closer with the vt105 - moved the graph parser
+  into ground of the old parser, that seems to help a lot. The
+  label characters now appear. However, the scaling is off - and
+  I'm not sure I understand why. There doesn't seem to be any
+  way for the minc to inquire the scale of the terminal... maybe
+  one of the base inquiry tricks is off? Not likely that the minc
+  thinks it's talking to a vt52 though, it's definitely trying to
+  use the square format.
+  All the other issues are still open, but at least I'm getting
+  something vaguely resembling a graph now.
+
+
+12/30
+- connected a minc setup to the vt105 for the first time. Kind of
+  disappointing, it does not work at all.
+  a) the left and right graph sidelines are made up of graphic
+  characters. Don't have that char set yet.
+  b) something is really wrong with the graph parsing - it looks
+  like random dots.
+  c) the horizontal lines are not in the right place.
+  d) the terminal stays in graph mode, and that messes up regular
+  character processing. Something is definitely wrong there too.
+
+
+12/27
+- lots of issues with inferring ram and rom, but maybe I'm there
+  now - the latest magic incantation seems to work. I hate the
+  bloody toolchains though, all of it is really beyond unhelpful
+  and stupid. Still can't get the bloody font rom to infer though,
+  and the stupid bloody toolchain insisting it is being read
+  asynchronously is just bloody stupid.
+
+
+12/25
+- added bold by stretching the font pixel one spot horizontally.
+  Looks good enough - noticably bold, and still readable within
+  the limitations of the resolution.
+- fixed the attribute alignment.
+
+
+12/24
+- added arrow keys. That gave a bit of a surprise: while outbound
+  the terminal is expected to handle parameters on cursor commands,
+  apparently the host is not able to deal with those inbound. At
+  least my KDE Linux box doesn't...
+- secondly, vttest is not completely vt100-compliant, it depends
+  on later model handling of the LCF clearing for the asterisk
+  at pos 1,80 in the first test screen. Not sure which one, for
+  now I'll just clear LCF everywhere.
+- added attribute memory, and moved to word storage to accomodate
+  that - seemed by far the easiest way to deal with more bits to
+  drag around for each char, including scrolling, erasing and what
+  have you. Seems to work.
+- and added the attributes. Everything works except bold - need to
+  figure out how to cause something that appears bold on the screen,
+  maybe something with a different color? not sure yet. Oh and the
+  attribute stuff is one pixel too early, need to fix that still.
+
+
+12/23
+- another day of debugging the vt. vttest now almost completely
+  passes - there are a couple details in scrolling that I'm not
+  sure of, but neither am I sure that my linux laptop does it
+  ok. Since yesterday, the viewports and origin stuff is fixed,
+  and tabs work too.
+  Still to do: attributes and multiple char keys - it's becoming
+  annoying that the arrow keys don't work yet.
+  And then onto graphics :-)
+
+
+12/22
+- worked on the vt for a couple of days, it is starting to work
+  better and better. Couple things left to do:
+- highlight/reverse/blinking/underscore text
+- keyboard keys that transmit more than a single char
+- origin mode and viewports are still buggy
+- tabs don't work yet
+  but so far, it's making nice progress. And the vt105 theory
+  is starting to come together too.
+
+
+12/18
+- adding a branch for work on the vt105.
+- setup a new board directory for de1: de1vt; contrary to
+  all other board dirs, this will not contain a complete system
+  but just the vt. This saves hugely on the build time during
+  development.
+- moving blockramt42 to vtbrt42
+- changing to 8x20 font, and 24 lines on vga 640x480 - seems
+  like that will be the closest to vt100/vt105 and certainly
+  the most compatible.
+- cleaned up the vtbrt42 sources somewhat.
+- cleaned up the signal lists for the major components included
+  in the vt.vhd source. Some of those are not relevant for the
+  vt cpu... and adding them properly would mean adding a lot of
+  unnecessary signals to the vt source, that would then only be
+  removed by the optimizers. Set them to defaults for now, so
+  omitting them will accomplish the same thing. Means you can't
+  just set the vt cpu to be a 24 or 94 and expect all tricks to
+  work. And adding a console to the vt cpu is not enabled either.
+  Oh well, maybe I should just add everything. Not now though ;-)
+
+
+11/23
+- adding the max1000 16K le board.
+
+
 11/22
 - the sync issue with the de0nano adc chip appeared again,
   modified the driver to run on negative clock - if that
@@ -9,6 +943,9 @@
   I kind of like the VMNF device space mapping. But that doesn't
   name the devices, and it'll take a lot of room too.
 
+
+- adcsr_enable_id -> if that is on, the preamp status will be
+  stored in the high 4 bits of the adbuf; see vmna test 30.
 
 11/21
 - fixed the last couple errors in mncad - to do with setting

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -50,9 +50,9 @@ entity cr is
       cpu_rsv : in std_logic;
 
 -- lma (f11)
-      mmu_lma_c1 : in std_logic;
-      mmu_lma_c0 : in std_logic;
-      mmu_lma_eub : in std_logic_vector(21 downto 0);
+      mmu_lma_c1 : in std_logic := '0';
+      mmu_lma_c0 : in std_logic := '0';
+      mmu_lma_eub : in std_logic_vector(21 downto 0) := (others => '0');
 
 -- maintenance register (j11)
       cpu_kmillhalt : out std_logic;
@@ -529,6 +529,7 @@ begin
                         if bus_control_dato = '1' then
                            lma_fj <= bus_dato(6);
                         end if;
+                     when others =>
                   end case;
                end if;
 

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -381,33 +381,6 @@ begin
             end if;
          else
 
-            enable_counter_filter <= enable_counter_filter(filter_in_t'high-1 downto 0) & kwcsr_go;
-            if enable_counter_filter = filter_in_t'(others => '0') then
-               counter_enable <= '0';
-            elsif enable_counter_filter = filter_in_t'(others => '1') then
-               if counter_enable = '0' and kwcsr_mode(1) = '0' then
-                  counter <= kwbuf_preset;
-               elsif counter_enable = '0' and kwcsr_mode(1) = '1' then
-                  counter <= (others => '0');
-               end if;
-               counter_enable <= '1';
-            end if;
-
-            st1_pulse_filter <= st1_pulse_filter(filter_in_t'high-1 downto 0) & st1_pulse;
-            if st1_pulse_filter = filter_in_t'(others => '0') then
-               counter_st1_pulse_ack <= '0';
-               counter_st1_pulse <= '0';
-            elsif st1_pulse_filter = filter_in_t'(others => '1') then
-               counter_st1_pulse <= '1';
-            end if;
-            st2_pulse_filter <= st2_pulse_filter(filter_in_t'high-1 downto 0) & st2_pulse;
-            if st2_pulse_filter = filter_in_t'(others => '0') then
-               counter_st2_pulse_ack <= '0';
-               counter_st2_pulse <= '0';
-            elsif st2_pulse_filter = filter_in_t'(others => '1') then
-               counter_st2_pulse <= '1';
-            end if;
-
             pulse1mhz := '0';
             if kwcsr_disintosc = '0' then
                count50 <= count50 + 1;
@@ -512,6 +485,33 @@ begin
             if counter_enable = '0' and kwcsr_rate /= "110" then -- FIXME, really not sure about the rate /= 6 exclusion here. But it is the one last thing to make the VMNC test pass flawlessly.
                counter <= kwbuf_preset;
                kwbuf <= kwbuf_preset;
+            end if;
+
+            enable_counter_filter <= enable_counter_filter(filter_in_t'high-1 downto 0) & kwcsr_go;
+            if enable_counter_filter = filter_in_t'(others => '0') then
+               counter_enable <= '0';
+            elsif enable_counter_filter = filter_in_t'(others => '1') then
+               if counter_enable = '0' and kwcsr_mode(1) = '0' then
+                  counter <= kwbuf_preset;
+               elsif counter_enable = '0' and kwcsr_mode(1) = '1' then
+                  counter <= (others => '0');
+               end if;
+               counter_enable <= '1';
+            end if;
+
+            st1_pulse_filter <= st1_pulse_filter(filter_in_t'high-1 downto 0) & st1_pulse;
+            if st1_pulse_filter = filter_in_t'(others => '0') then
+               counter_st1_pulse_ack <= '0';
+               counter_st1_pulse <= '0';
+            elsif st1_pulse_filter = filter_in_t'(others => '1') then
+               counter_st1_pulse <= '1';
+            end if;
+            st2_pulse_filter <= st2_pulse_filter(filter_in_t'high-1 downto 0) & st2_pulse;
+            if st2_pulse_filter = filter_in_t'(others => '0') then
+               counter_st2_pulse_ack <= '0';
+               counter_st2_pulse <= '0';
+            elsif st2_pulse_filter = filter_in_t'(others => '1') then
+               counter_st2_pulse <= '1';
             end if;
 
          end if;

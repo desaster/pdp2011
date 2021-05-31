@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2020 Sytse van Slooten
+-- Copyright (c) 2008-2021 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -135,7 +135,7 @@ component unibus is
       rh_sdcard_sclk : out std_logic;
       rh_sdcard_miso : in std_logic := '0';
       rh_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
-      rh_type : in integer range 4 to 7 := 6;
+      rh_type : in integer range 1 to 7 := 6;
 
 -- xu enc424j600 controller interface
       have_xu : in integer range 0 to 1 := 0;                        -- enable conditional compilation
@@ -198,6 +198,77 @@ component unibus is
       dr11c_ndrhi : out std_logic;                                   -- new data ready : dr11c_out(15 downto 8) has new data
       dr11c_dxm : out std_logic;                                     -- data transmitted : dr11c_in data has been read by the cpu
       dr11c_init : out std_logic;                                    -- unibus reset propagated out to the user device
+
+-- minc-11
+
+      have_mncad : in integer range 0 to 1 := 0;                     -- mncad: a/d, max one card in a system
+      have_mnckw : in integer range 0 to 2 := 0;                     -- mnckw: clock, either one or two
+      have_mncaa : in integer range 0 to 4 := 0;                     -- mncaa: d/a
+      have_mncdi : in integer range 0 to 4 := 0;                     -- mncdi: digital in
+      have_mncdo : in integer range 0 to 4 := 0;                     -- mncdo: digital out
+      ad_start : out std_logic;                                      -- interface from mncad to a/d hardware : '1' signals to start converting
+      ad_done : in std_logic := '1';                                 -- interface from mncad to a/d hardware : '1' signals to the mncad that the a/d has completed a conversion
+      ad_channel : out std_logic_vector(5 downto 0);                 -- interface from mncad to a/d hardware : the channel number for the current command
+      ad_nxc : in std_logic := '1';                                  -- interface from mncad to a/d hardware : '1' signals to the mncad that the required channel does not exist
+      ad_sample : in std_logic_vector(11 downto 0) := "000000000000";-- interface from mncad to a/d hardware : the value of the last sample
+      kw_st1in : in std_logic := '0';                                -- mnckw0 st1 signal input, active on rising edge
+      kw_st2in : in std_logic := '0';                                -- mnckw0 st2 signal input, active on rising edge
+      kw_st1out : out std_logic;                                     -- mnckw0 st1 output pulse - actually : copy of the st1flag in the csr
+      kw_st2out : out std_logic;                                     -- mnckw0 st2 output pulse
+      kw_clkov : out std_logic;                                      -- mnckw0 clkovf output pulse
+      da_dac0 : out std_logic_vector(11 downto 0);                   -- da channel 0 - 1st mncaa unit
+      da_dac1 : out std_logic_vector(11 downto 0);                   -- da channel 1
+      da_dac2 : out std_logic_vector(11 downto 0);                   -- da channel 2
+      da_dac3 : out std_logic_vector(11 downto 0);                   -- da channel 3
+      da_dac4 : out std_logic_vector(11 downto 0);                   -- da channel 4 - 2nd mncaa unit
+      da_dac5 : out std_logic_vector(11 downto 0);                   -- da channel 5
+      da_dac6 : out std_logic_vector(11 downto 0);                   -- da channel 6
+      da_dac7 : out std_logic_vector(11 downto 0);                   -- da channel 7
+      da_dac8 : out std_logic_vector(11 downto 0);                   -- da channel 8 - 3rd mncaa unit
+      da_dac9 : out std_logic_vector(11 downto 0);                   -- da channel 9
+      da_dac10 : out std_logic_vector(11 downto 0);                  -- da channel 10
+      da_dac11 : out std_logic_vector(11 downto 0);                  -- da channel 11
+      da_dac12 : out std_logic_vector(11 downto 0);                  -- da channel 12 - 4th mncaa unit
+      da_dac13 : out std_logic_vector(11 downto 0);                  -- da channel 13
+      da_dac14 : out std_logic_vector(11 downto 0);                  -- da channel 14
+      da_dac15 : out std_logic_vector(11 downto 0);                  -- da channel 15
+      have_diloopback : in integer range 0 to 1 := 0;                -- set to 1 to loop back mncdo0 to mncdi0 internally for testing
+      di_dir0 : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi0 data input register
+      di_strobe0 : in std_logic := '0';                              -- strobe
+      di_reply0 : out std_logic;                                     -- reply
+      di_pgmout0 : out std_logic;                                    -- pgmout
+      di_event0 : out std_logic;                                     -- event
+      di_dir1 : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi1 data input register
+      di_strobe1 : in std_logic := '0';                              -- strobe
+      di_reply1 : out std_logic;                                     -- reply
+      di_pgmout1 : out std_logic;                                    -- pgmout
+      di_event1 : out std_logic;                                     -- event
+      di_dir2 : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi2 data input register
+      di_strobe2 : in std_logic := '0';                              -- strobe
+      di_reply2 : out std_logic;                                     -- reply
+      di_pgmout2 : out std_logic;                                    -- pgmout
+      di_event2 : out std_logic;                                     -- event
+      di_dir3 : in std_logic_vector(15 downto 0) := "0000000000000000";    -- mncdi3 data input register
+      di_strobe3 : in std_logic := '0';                              -- strobe
+      di_reply3 : out std_logic;                                     -- reply
+      di_pgmout3 : out std_logic;                                    -- pgmout
+      di_event3 : out std_logic;                                     -- event
+      do_dor0 : out std_logic_vector(15 downto 0);                   -- mncdo unit 0 data output
+      do_hb_strobe0 : out std_logic;                                 -- mncdo unit 0 high byte strobe
+      do_lb_strobe0 : out std_logic;                                 -- mncdo unit 0 low byte strobe
+      do_reply0 : in std_logic := '0';                               -- mncdo unit 0 reply input
+      do_dor1 : out std_logic_vector(15 downto 0);                   -- mncdo unit 1 data output
+      do_hb_strobe1 : out std_logic;                                 -- mncdo unit 1 high byte strobe
+      do_lb_strobe1 : out std_logic;                                 -- mncdo unit 1 low byte strobe
+      do_reply1 : in std_logic := '0';                               -- mncdo unit 1 reply input
+      do_dor2 : out std_logic_vector(15 downto 0);                   -- mncdo unit 2 data output
+      do_hb_strobe2 : out std_logic;                                 -- mncdo unit 2 high byte strobe
+      do_lb_strobe2 : out std_logic;                                 -- mncdo unit 2 low byte strobe
+      do_reply2 : in std_logic := '0';                               -- mncdo unit 2 reply input
+      do_dor3 : out std_logic_vector(15 downto 0);                   -- mncdo unit 3 data output
+      do_hb_strobe3 : out std_logic;                                 -- mncdo unit 3 high byte strobe
+      do_lb_strobe3 : out std_logic;                                 -- mncdo unit 3 low byte strobe
+      do_reply3 : in std_logic := '0';                               -- mncdo unit 3 reply input
 
 -- cpu console, switches and display register
       have_csdr : in integer range 0 to 1 := 1;
@@ -293,8 +364,12 @@ component paneldriver is
       cons_map18 : in std_logic;
       cons_map22 : in std_logic;
 
-      sample_cycles : in std_logic_vector(15 downto 0) := x"0400";
-      minon_cycles : in std_logic_vector(15 downto 0) := x"0400";
+      sample_cycles : in std_logic_vector(15 downto 0) := x"0100";   -- a sample is this many runs of the panel state machine (which has 16 cycles, so multiply by that)
+      minon_cycles : in std_logic_vector(15 downto 0) := x"0100";    -- if a signal has been on for this many cycles in a sample, then the corresponding output will be on - note 16, above.
+
+      paneltype : in integer range 0 to 3 := 0;                      -- 0 - no console; 1 - PiDP11, regular; 2 - PiDP11, widdershins; 3 - PDP2011 nanocons
+
+      cons_reset : out std_logic;                                    -- a request for a reset from the console
 
       clkin : in std_logic;
       reset : in std_logic
@@ -303,26 +378,43 @@ end component;
 
 component vt is
    port(
-      vga_hsync : out std_logic;
-      vga_vsync : out std_logic;
-      vga_out : out std_logic;
+      vga_hsync : out std_logic;                                     -- horizontal sync
+      vga_vsync : out std_logic;                                     -- vertical sync
+      vga_fb : out std_logic;                                        -- output - full
+      vga_ht : out std_logic;                                        -- output - half
 
 -- serial port
-      tx : out std_logic;
-      rx : in std_logic;
+      tx : out std_logic;                                            -- transmit
+      rx : in std_logic;                                             -- receive
+      rts : out std_logic;                                           -- request to send
+      cts : in std_logic := '0';                                     -- clear to send
+      bps : in integer range 1200 to 230400 := 9600;                 -- bps rate - don't set to more than 38400
+      force7bit : in integer range 0 to 1 := 0;                      -- zero out high order bit on transmission and reception
+      rtscts : in integer range 0 to 1 := 0;                         -- conditional compilation switch for rts and cts signals; also implies to include core that implements a silo buffer
 
 -- ps2 keyboard
-      ps2k_c : in std_logic;
-      ps2k_d : in std_logic;
+      ps2k_c : in std_logic;                                         -- clock
+      ps2k_d : in std_logic;                                         -- data
 
 -- debug & blinkenlights
-      ifetch : out std_logic;
-      iwait : out std_logic;
+      ifetch : out std_logic;                                        -- ifetch : the cpu is running an instruction fetch cycle
+      iwait : out std_logic;                                         -- iwait : the cpu is in wait state
+      teste : in std_logic := '0';                                   -- teste : display 24*80 capital E without changing the display buffer
+      testf : in std_logic := '0';                                   -- testf : display 24*80 all pixels on
+      vga_debug : out std_logic_vector(15 downto 0);                 -- debug output from microcode
+      vga_bl : out std_logic_vector(9 downto 0);                     -- blinkenlight vector
+
+-- vt type code : 100 or 105
+      vttype : in integer range 100 to 105 := 100;                   -- vt100 or vt105
+      vga_cursor_block : in std_logic := '1';                        -- cursor is block ('1') or underline ('0')
+      vga_cursor_blink : in std_logic := '0';                        -- cursor blinks ('1') or not ('0')
+      have_act_seconds : in integer range 0 to 7200 := 900;          -- auto screen off time, in seconds; 0 means disabled
+      have_act : in integer range 1 to 2 := 2;                       -- auto screen off counter reset by keyboard and serial port activity (1) or keyboard only (2)
 
 -- clock & reset
-      cpuclk : in std_logic;
-      clk50mhz : in std_logic;
-      reset : in std_logic
+      cpuclk : in std_logic;                                         -- cpuclk : should be around 10MHz, give or take a few
+      clk50mhz : in std_logic;                                       -- clk50mhz : used for vga signal timing
+      reset : in std_logic                                           -- reset
    );
 end component;
 
@@ -345,7 +437,6 @@ end component;
 
 signal c0 : std_logic;
 signal c0_locked : std_logic;
-signal c0_reset : std_logic := '1';
 
 signal reset : std_logic;
 signal cpuclk : std_logic := '0';
@@ -359,6 +450,8 @@ signal ifetch: std_logic;
 signal iwait: std_logic;
 signal txtx : std_logic;
 signal rxrx : std_logic;
+signal txtx0 : std_logic;
+signal rxrx0 : std_logic;
 signal txtx1 : std_logic;
 signal rxrx1 : std_logic;
 
@@ -369,27 +462,6 @@ signal dato : std_logic_vector(15 downto 0);
 signal control_dati : std_logic;
 signal control_dato : std_logic;
 signal control_datob : std_logic;
-
-signal have_rl : integer range 0 to 1;
-signal rl_cs : std_logic;
-signal rl_mosi : std_logic;
-signal rl_miso : std_logic;
-signal rl_sclk : std_logic;
-signal rl_sddebug : std_logic_vector(3 downto 0);
-
-signal have_rk : integer range 0 to 1;
-signal rk_cs : std_logic;
-signal rk_mosi : std_logic;
-signal rk_miso : std_logic;
-signal rk_sclk : std_logic;
-signal rk_sddebug : std_logic_vector(3 downto 0);
-
-signal have_rh : integer range 0 to 1;
-signal rh_cs : std_logic;
-signal rh_mosi : std_logic;
-signal rh_miso : std_logic;
-signal rh_sclk : std_logic;
-signal rh_sddebug : std_logic_vector(3 downto 0);
 
 signal sddebug : std_logic_vector(3 downto 0);
 
@@ -465,45 +537,26 @@ signal minon_cycles : std_logic_vector(15 downto 0) := x"0400";
 
 begin
 
-   have_rh <= 0; have_rl <= 0; have_rk <= 1;
-
    pdp11: unibus port map(
       modelcode => 70,
 
-      have_kl11 => 2,
-      tx0 => txtx,
-      rx0 => rxrx,
-      cts0 => cts,
-      rts0 => rts,
+      have_kl11 => 1,
+      tx0 => txtx0,
+      rx0 => rxrx0,
       kl0_bps => 9600,
       kl0_force7bit => 1,
-      kl0_rtscts => 0,
 
       tx1 => txtx1,
       rx1 => rxrx1,
       kl1_bps => 9600,
       kl1_force7bit => 1,
 
-      have_rl => have_rl,
-      rl_sdcard_cs => rl_cs,
-      rl_sdcard_mosi => rl_mosi,
-      rl_sdcard_sclk => rl_sclk,
-      rl_sdcard_miso => rl_miso,
-      rl_sdcard_debug => rl_sddebug,
-
-      have_rk => have_rk,
-      rk_sdcard_cs => rk_cs,
-      rk_sdcard_mosi => rk_mosi,
-      rk_sdcard_sclk => rk_sclk,
-      rk_sdcard_miso => rk_miso,
-      rk_sdcard_debug => rk_sddebug,
-
-      have_rh => have_rh,
-      rh_sdcard_cs => rh_cs,
-      rh_sdcard_mosi => rh_mosi,
-      rh_sdcard_sclk => rh_sclk,
-      rh_sdcard_miso => rh_miso,
-      rh_sdcard_debug => rh_sddebug,
+      have_rh => 1,
+      rh_sdcard_cs => sdcard_cs,
+      rh_sdcard_mosi => sdcard_mosi,
+      rh_sdcard_sclk => sdcard_sclk,
+      rh_sdcard_miso => sdcard_miso,
+      rh_sdcard_debug => sddebug,
 
       have_xu => 1,
       xu_cs => xu_cs,
@@ -600,28 +653,30 @@ begin
       sample_cycles => sample_cycles,
       minon_cycles => minon_cycles,
 
+		paneltype => 0,
+
       clkin => cpuclk,
       reset => cpureset
    );
---   vt0: vt port map(
---      vga_hsync => vga_hsync,
---      vga_vsync => vga_vsync,
---      vga_out => vga_out,
---
---      rx => txtx0,
---      tx => rxrx0,
---
---      ps2k_c => ps2k_c,
---      ps2k_d => ps2k_d,
---
---      cpuclk => cpuclk,
---      clk50mhz => clkin,
---      reset => vtreset
---   );
+
+   vt0: vt port map(
+      vga_hsync => vga_hsync,
+      vga_vsync => vga_vsync,
+      vga_fb => vga_out,
+
+      rx => txtx0,
+      tx => rxrx0,
+
+      ps2k_c => ps2k_c,
+      ps2k_d => ps2k_d,
+
+      cpuclk => cpuclk,
+      clk50mhz => clkin,
+      reset => vtreset
+   );
 
    pll0: pll port map(
 	   refclk => clkin,
-	   rst => c0_reset,
       outclk_0 => c0,
       locked => c0_locked
    );
@@ -667,20 +722,10 @@ begin
 	pod(3) <= ifetch;
 	pod(7 downto 4) <= cons_dr(3 downto 0);
 
-   redled <= not ps2k_c & not ps2k_d & ifetch & not rxrx & not txtx1 & not rxrx1 & sddebug;
+   redled <= not ps2k_c & not ps2k_d & ifetch & '0' & not txtx0 & not rxrx0 & sddebug;
 
-   tx <= txtx;
-   rxrx <= rx;
    tx1 <= txtx1;
    rxrx1 <= rx1;
-
-   sddebug <= rh_sddebug when have_rh = 1 else rl_sddebug when have_rl = 1 else rk_sddebug;
-   sdcard_cs <= rh_cs when have_rh = 1 else rl_cs when have_rl = 1 else rk_cs;
-   sdcard_mosi <= rh_mosi when have_rh = 1 else rl_mosi when have_rl = 1 else rk_mosi;
-   sdcard_sclk <= rh_sclk when have_rh = 1 else rl_sclk when have_rl = 1 else rk_sclk;
-   rh_miso <= sdcard_miso;
-   rl_miso <= sdcard_miso;
-   rk_miso <= sdcard_miso;
 
    vgag <= "1111" when vga_out = '1' else "0000";
    vgab <= "0000";
@@ -691,18 +736,15 @@ begin
    dram_match <= '1' when addr(21 downto 18) /= "1111" else '0';
    dram_cke <= '1';
    dram_clk <= c0;
-   reset <= '1' when resetbutton = '0' or c0_locked = '0' else '0';
-
-   process(clkin)
-   begin
-      if clkin='1' and clkin'event then
-         c0_reset <= '0';
-      end if;
-   end process;
+	vtreset <= '1' when c0_locked = '0' else '0';
 
    process(c0)
    begin
       if c0='1' and c0'event then
+
+         if resetbutton = '0' or c0_locked = '0' then
+            reset <= '1';
+         end if;
 
          if reset = '1' then
             dram_fsm <= dram_init;
@@ -721,6 +763,10 @@ begin
             cpureset <= '1';
             cpuresetlength <= 63;
             dram_refresh_count <= 1;
+				if resetbutton = '1' and c0_locked = '1' then
+					reset <= '0';
+				end if;
+
          else
 
             case dram_fsm is
