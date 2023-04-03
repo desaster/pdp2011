@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -26,6 +26,7 @@ entity de10ladc is
       ad_channel : in std_logic_vector(5 downto 0);
       ad_nxc : out std_logic := '0';
       ad_sample : out std_logic_vector(11 downto 0) := "000000000000";
+      ad_type : out std_logic_vector(3 downto 0);
 
       ad_ch8 : in std_logic_vector(11 downto 0) := "000000000000";
       ad_ch9 : in std_logic_vector(11 downto 0) := "000000000000";
@@ -83,6 +84,14 @@ entity de10ladc is
       ad_ch61 : in std_logic_vector(11 downto 0) := "000000000000";
       ad_ch62 : in std_logic_vector(11 downto 0) := "000000000000";
       ad_ch63 : in std_logic_vector(11 downto 0) := "000000000000";
+
+      ad_ch8_15 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch16_23 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch24_31 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch32_39 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch40_47 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch48_55 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch56_63 : in std_logic_vector(3 downto 0) := "0000";
 
       clk : in std_logic;
       clk50mhz : in std_logic;
@@ -144,6 +153,16 @@ begin
    adc_nxc <= '0';
    ad_nxc <= adc_nxc;
 
+   ad_type <=
+      ad_ch8_15  when ad_channel(5 downto 3) = "001" else
+      ad_ch16_23 when ad_channel(5 downto 3) = "010" else            -- FIXME a reminder that ch 17 is the built-in NTC temperature sensor in the max10 - it should be single ended
+      ad_ch24_31 when ad_channel(5 downto 3) = "011" else
+      ad_ch32_39 when ad_channel(5 downto 3) = "100" else
+      ad_ch40_47 when ad_channel(5 downto 3) = "101" else
+      ad_ch48_55 when ad_channel(5 downto 3) = "110" else
+      ad_ch56_63 when ad_channel(5 downto 3) = "111" else
+      "0000";
+
    adcpll: pll10mhz port map(
       inclk0 => clk50mhz,
       c0 => clk10mhz,
@@ -189,7 +208,7 @@ begin
 -- also, channel 17 - 10001 - is the built-in NTC that will report the max10 core
 -- temp - see the manual for a conversion table. It would be tempting to set that
 -- on any of the mappings that don't directly reference a 'real' channel, but then,
--- converting the build-in NTC drops the conversion frequency. But I still want to
+-- converting the built-in NTC drops the conversion frequency. But I still want to
 -- enable reading it, not block the core for missing channels, and not slow down
 -- because someone unwittingly does a sweep of the first 8 channels.
 -- Hence this weird logic.

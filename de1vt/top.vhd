@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -18,6 +18,8 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+use work.pdp2011.all;
 
 entity top is
    port(
@@ -53,48 +55,6 @@ entity top is
 end top;
 
 architecture implementation of top is
-
-component vt is
-   port(
-      vga_hsync : out std_logic;                                     -- horizontal sync
-      vga_vsync : out std_logic;                                     -- vertical sync
-      vga_fb : out std_logic;                                        -- output - full
-      vga_ht : out std_logic;                                        -- output - half
-
--- serial port
-      tx : out std_logic;                                            -- transmit
-      rx : in std_logic;                                             -- receive
-      rts : out std_logic;                                           -- request to send
-      cts : in std_logic := '0';                                     -- clear to send
-      bps : in integer range 1200 to 230400 := 9600;                 -- bps rate - don't set to more than 38400
-      force7bit : in integer range 0 to 1 := 0;                      -- zero out high order bit on transmission and reception
-      rtscts : in integer range 0 to 1 := 0;                         -- conditional compilation switch for rts and cts signals; also implies to include core that implements a silo buffer
-
--- ps2 keyboard
-      ps2k_c : in std_logic;                                         -- clock
-      ps2k_d : in std_logic;                                         -- data
-
--- debug & blinkenlights
-      ifetch : out std_logic;                                        -- ifetch : the cpu is running an instruction fetch cycle
-      iwait : out std_logic;                                         -- iwait : the cpu is in wait state
-      teste : in std_logic := '0';                                   -- teste : display 24*80 capital E without changing the display buffer
-      testf : in std_logic := '0';                                   -- testf : display 24*80 all pixels on
-      vga_debug : out std_logic_vector(15 downto 0);                 -- debug output from microcode
-      vga_bl : out std_logic_vector(9 downto 0);                     -- blinkenlight vector
-
--- vt type code : 100 or 105
-      vttype : in integer range 100 to 105 := 100;                   -- vt100 or vt105
-      vga_cursor_block : in std_logic := '1';                        -- cursor is block ('1') or underline ('0')
-      vga_cursor_blink : in std_logic := '0';                        -- cursor blinks ('1') or not ('0')
-      have_act_seconds : in integer range 0 to 7200 := 900;          -- auto screen off time, in seconds; 0 means disabled
-      have_act : in integer range 1 to 2 := 2;                       -- auto screen off counter reset by keyboard and serial port activity (1) or keyboard only (2)
-
--- clock & reset
-      cpuclk : in std_logic;                                         -- cpuclk : should be around 10MHz, give or take a few
-      clk50mhz : in std_logic;                                       -- clk50mhz : used for vga signal timing
-      reset : in std_logic                                           -- reset
-   );
-end component;
 
 component ssegdecoder is
    port(
@@ -132,7 +92,7 @@ begin
 
 --   c0 <= clkin;
 
-   vt0: vt port map(
+   vt0: vt10x port map(
       vga_hsync => vga_hsync,
       vga_vsync => vga_vsync,
       vga_fb => vga_fb,

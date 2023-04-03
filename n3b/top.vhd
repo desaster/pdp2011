@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -232,31 +232,6 @@ component unibus is
       clk : in std_logic;                                            -- cpu clock
       clk50mhz : in std_logic;                                       -- 50Mhz clock for peripherals
       reset : in std_logic                                           -- active '1' synchronous reset
-   );
-end component;
-
-component vt is
-   port(
-      vga_hsync : out std_logic;
-      vga_vsync : out std_logic;
-      vga_out : out std_logic;
-
--- serial port
-      tx : out std_logic;
-      rx : in std_logic;
-
--- ps2 keyboard
-      ps2k_c : in std_logic;
-      ps2k_d : in std_logic;
-
--- debug & blinkenlights
-      ifetch : out std_logic;
-      iwait : out std_logic;
-
--- clock & reset
-      cpuclk : in std_logic;
-      clk50mhz : in std_logic;
-      reset : in std_logic
    );
 end component;
 

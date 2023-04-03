@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -39,6 +39,7 @@ entity mncdo is
       d : out std_logic_vector(15 downto 0);
       hb_strobe : out std_logic;
       lb_strobe : out std_logic;
+      ie : out std_logic;
       reply : in std_logic := '0';
 
       have_mncdo : in integer range 0 to 1 := 0;
@@ -76,6 +77,9 @@ signal dodata : std_logic_vector(15 downto 0);
 
 signal counter : integer range 0 to 255;
 
+signal reply1 : std_logic;
+signal reply2 : std_logic;
+
 begin
 
    base_addr_match <= '1' when base_addr(17 downto 2) = bus_addr(17 downto 2) and have_mncdo = 1 else '0';
@@ -83,10 +87,14 @@ begin
 
    docsr <= "00000000" & docsr_done & docsr_ie & '0' & docsr_bit4 & docsr_bit3 & "000";
    d <= dodata;
+   ie <= docsr_ie;
 
    process(clk, base_addr_match, reset, have_mncdo)
    begin
       if clk = '1' and clk'event then
+
+         reply1 <= reply;
+         reply2 <= reply1;
 
          if have_mncdo = 1 then
             if reset = '1' then
@@ -194,7 +202,7 @@ begin
                   end if;
                end if;
 
-               if reply = '1' then
+               if reply2 = '1' then
                   docsr_done <= '1';
                end if;
 

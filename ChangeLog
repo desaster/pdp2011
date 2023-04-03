@@ -1,4 +1,1050 @@
 
+1/25
+- received the external antenna equipment. Makes for better
+  speed, but maybe even more importantly, for less undefined
+  interference in the tests. Ping times are much more even, for
+  example.
+- changed the wifi power save bit to not - it also makes a difference
+  for predictable, stable response times. Added command to configure
+  it - and possible other wifi settings at some point wifiopt,
+  takes a string; for now the names of the wifi_ps_type_t enumeration.
+
+
+1/24
+- minor changes to xubf and xubw for stability with esp32, and
+  to increase the chance that the start command will be processed
+  on startup of the xu.
+- esp32 still seems to have issues with the spi speed. Ah, the
+  manual also states that it is rated for just above 10MHz,
+  while esp32c3 can do 60MHz. That explains a lot.
+
+
+1/18
+- set up the esp32pico board for debugging - it has the same
+  exact issues as the bigger esp32, the old devkitc. So it is
+  not my soldering after all.
+  Moved the SPI to the SPI3, and the srdy to a pin nearby.
+  Suddenly everything starts working nicely. Except still
+  the odd magik number failure - but less than one percent.
+  Shouldn't be a problem really. Throughput is decent - maybe
+  even better than with the esp32c3.
+
+
+1/17
+- reversed the srdy signal - since there are pullups on both
+  sides of the signal, it makes sense to let 0 be the active
+  state. As it was till now not having the esp connected would
+  result in false transactions.
+
+
+1/12
+- added commands to the esp32 console: stats, tasks, dumpnvs
+  and removed the dumpnvs call from info
+
+
+1/8
+- test setup just now, at 15 days uptime had the issue again
+  it's not just the netstat output; pstat output is affected
+  as well. Not vmstat though - at least not a running one,
+  didn't think to try and start a new.
+- shame, it was running really well for a really long time.
+  what was I running: a kernel compile, and the mhttpd was
+  open to the internet.
+
+
+2023/1/2
+- test setup on de0nano and esp32c3 now running 9 days, seems
+  completely stable.
+
+# uptime
+  9:33pm  up 9 days, 23 mins,  3 users,  load averages: 0.43, 0.39, 0.01
+# uname -a
+BSD pool172 2.11 2.11 BSD UNIX #69: Fri Dec 23 23:15:22 CET 2022     root@de0n.sytse.net:/usr/src/sys/PDP20111
+# netstat -in
+Name  Mtu   Network     Address            Ipkts Ierrs    Opkts Oerrs  Coll
+de0   1500  10.1        10.1.0.172       1131609    32   830613     0     0
+lo0   1536  127         127.0.0.1          63199     0    63199     0     0
+# netstat -s
+ip:
+        1167366 total packets received
+        0 bad header checksums
+        0 with size smaller than minimum
+        0 with data size < data length
+        0 with header length < data size
+        0 with data length < header length
+        6 fragments received
+        0 fragments dropped (dup or out of space)
+        0 fragments dropped after timeout
+        32580 packets forwarded
+        375695 packets not forwardable
+        14280 redirects sent
+icmp:
+        48455 calls to icmp_error
+        0 errors not generated 'cuz old message was icmp
+        Output histogram:
+                echo reply: 65011
+                destination unreachable: 48260
+                routing redirect: 14280
+                time exceeded: 195
+        0 messages with bad code fields
+        0 messages < minimum length
+        0 bad checksums
+        0 messages with bad length
+        Input histogram:
+                echo reply: 66983
+                routing redirect: 14280
+                echo: 65011
+                time exceeded: 195
+        65011 message responses generated
+tcp:
+        613884 packets sent
+                602208 data packets (316904941 bytes)
+                1349 data packets (311178 bytes) retransmitted
+                9531 ack-only packets (7938 delayed)
+                5 URG only packets
+                67 window probe packets
+                48 window update packets
+                676 control packets
+        491077 packets received
+                468933 acks (for 316954550 bytes)
+                5331 duplicate acks
+                0 acks for unsent data
+                20560 packets (1464355 bytes) received in-sequence
+                360 completely duplicate packets (3428 bytes)
+                4 packets with some dup. data (6 bytes duped)
+                466 out-of-order packets (0 bytes)
+                0 packets (0 bytes) of data after window
+                0 window probes
+                2 window update packets
+                0 packets received after close
+                0 discarded for bad checksums
+                0 discarded for bad header offset fields
+                0 discarded because packet too short
+        32 connection requests
+        661 connection accepts
+        691 connections established (including accepts)
+        1113 connections closed (including 43 drops)
+        302 embryonic connections dropped
+        407658 segments updated rtt (of 408773 attempts)
+        1356 retransmit timeouts
+                5 connections dropped by rexmit timeout
+        0 persist timeouts
+        191 keepalive timeouts
+                178 keepalive probes sent
+                13 connections dropped by keepalive
+udp:
+        0 incomplete headers
+        0 bad data length fields
+        0 bad checksums
+        88671 no port
+        40411 (arrived as bcast) no ports
+#
+
+12/29
+- the state of things at the moment:
+
+# uptime
+  1:24am  up 5 days,  4:13,  3 users,  load averages: 1.09, 0.61, 0.12
+# netstat -s
+ip:
+        834783 total packets received
+        0 bad header checksums
+        0 with size smaller than minimum
+        0 with data size < data length
+        0 with header length < data size
+        0 with data length < header length
+        6 fragments received
+        0 fragments dropped (dup or out of space)
+        0 fragments dropped after timeout
+        32580 packets forwarded
+        218527 packets not forwardable
+        14280 redirects sent
+icmp:
+        26330 calls to icmp_error
+        0 errors not generated 'cuz old message was icmp
+        Output histogram:
+                echo reply: 65011
+                destination unreachable: 26135
+                routing redirect: 14280
+                time exceeded: 195
+        0 messages with bad code fields
+        0 messages < minimum length
+        0 bad checksums
+        0 messages with bad length
+        Input histogram:
+                echo reply: 66983
+                routing redirect: 14280
+                echo: 65011
+                time exceeded: 195
+        65011 message responses generated
+tcp:
+        481570 packets sent
+                470963 data packets (304922595 bytes)
+                607 data packets (164923 bytes) retransmitted
+                9276 ack-only packets (7856 delayed)
+                5 URG only packets
+                67 window probe packets
+                48 window update packets
+                604 control packets
+        359022 packets received
+                337845 acks (for 304904238 bytes)
+                5164 duplicate acks
+                0 acks for unsent data
+                19850 packets (1440248 bytes) received in-sequence
+                318 completely duplicate packets (3338 bytes)
+                4 packets with some dup. data (6 bytes duped)
+                411 out-of-order packets (0 bytes)
+                0 packets (0 bytes) of data after window
+                0 window probes
+                2 window update packets
+                0 packets received after close
+                0 discarded for bad checksums
+                0 discarded for bad header offset fields
+                0 discarded because packet too short
+        27 connection requests
+        594 connection accepts
+        619 connections established (including accepts)
+        1002 connections closed (including 35 drops)
+        263 embryonic connections dropped
+        277167 segments updated rtt (of 277803 attempts)
+        615 retransmit timeouts
+                5 connections dropped by rexmit timeout
+        0 persist timeouts
+        98 keepalive timeouts
+                92 keepalive probes sent
+                6 connections dropped by keepalive
+udp:
+        0 incomplete headers
+        0 bad data length fields
+        0 bad checksums
+        52424 no ports
+        26289 (arrived as bcast) no ports
+#
+
+
+12/28
+- installing the desktop with the latest and greatest. And
+  while doing that, found out that with the xilinx work
+  day before, I apparently also reverted some of the
+  work on the esp xu. Weird. Redone now.
+
+
+12/26
+- merged the wnet branch into the master
+- started to reintegrate the old xilinx-based boards back
+  into the current state of things. That means some trivial
+  changes to allow for differences in the vhdl dialect,
+  and renaming the vt and cr components - into vt10x and
+  cr11, respectively.
+  Only really done the n2b1200 setup so far, and can't
+  test that yet, something about cable drivers for the
+  board - that'll have to wait till after the desktop
+  has been upgraded.
+
+
+12/24
+- reinstalled the laptop with alma 9 and esp-idf v5.0 stable
+- made some changes to accomodate the new esp-idf version,
+  testing so far was on 4.x
+- optimized the xmit flow in xubw, such that the bus is not
+  polled at maximum speed - it messed up the idle display.
+
+
+12/14
+- set up the old esp32 board again - not much luck getting
+  a connection across that, possibly due to the lack of
+  flexibility in positioning its antenna. But also the cpu
+  shows a lack of horsepower compared to the c3 board I've
+  been testing with. Not sure if that's real or just because
+  I did something wrong - one symptom is that it can't seem
+  to keep up with the spi polling, especially on the short
+  transactions when not running. Could also be that the srdy
+  line is not working as it should - and also, it's not
+  possible to flash the part when it's connected, and I'm
+  not sure why.
+- the other c3 board on the de270 sort-of works now, on
+  the fritzbox AP - hardly on the airport. But not as
+  nicely as the de0nano test setup, although that crashed
+  overnight and didn't want to get back to it's former
+  speed at first - also there, not sure why. The
+  euphoria of yesterday might be a bit premature, it still
+  makes sense to order some antenna stuff and see how that
+  affects things.
+- on the positive side, adding the command line interface
+  to the esp32 really works. It adds a lot of options to
+  figure out what is going on without having to recompile
+  or restart.
+
+
+12/13
+- improved the command processor to allow to set ssid and
+  password of the ap to connect to. And moved to my other
+  ap for testing. hey, it's soooo fast! getting over 150KB
+  ftp speeds now. And consistent <20ms ping. Not sure why,
+  it didn't want to work before but it sure does now :-)
+
+
+12/8
+- the issue of the start command not being picked up by the
+  xubw microcode is probably due to the length of the time
+  the xu cpu is locked out by the spi transaction. Maybe
+  an easy fix: when the xu is not running, do a short
+  transaction that comprises only the header - that is still
+  useful for getting the mac address.
+- reorganizing the esp32 sources and testing. For the first
+  time ran a test where the wifi goes faster on a long ftp
+  than the comparable enc424 goes - 116KBytes/s. Wifi
+  supremacy :-)
+
+
+12/5
+- added mac address to header, to automatically set it in
+  the xu part of the code.
+
+
+12/3
+- trying to get things a bit more organized and finding out
+  about what matters for tuning.
+  Seems like the max of 1500 payload doesn't work for the
+  esp, I think to get 4 less? needs more testing, but it could
+  be something that they forgot about the crc. 2.11bsd doesn't
+  seem to be filling buffers over 1k?
+- still throughput is less than yesterday, and not sure why.
+  needs some more investigation.
+- netstat output looks a lot more civilized now though:
+  (under more or less the same scenario)
+
+# netstat -s
+ip:
+        51863 total packets received
+        0 bad header checksums
+        0 with size smaller than minimum
+        0 with data size < data length
+        0 with header length < data size
+        0 with data length < header length
+        40 fragments received
+        0 fragments dropped (dup or out of space)
+        0 fragments dropped after timeout
+        0 packets forwarded
+        3824 packets not forwardable
+        0 redirects sent
+icmp:
+        100 calls to icmp_error
+        0 errors not generated 'cuz old message was icmp
+        Output histogram:
+                echo reply: 5840
+                destination unreachable: 100
+        0 messages with bad code fields
+        0 messages < minimum length
+        0 bad checksums
+        0 messages with bad length
+        Input histogram:
+                echo reply: 3383
+                destination unreachable: 100
+                echo: 5840
+        5840 message responses generated
+tcp:
+        41156 packets sent
+                39163 data packets (17031836 bytes)
+                1619 data packets (912791 bytes) retransmitted
+                319 ack-only packets (189 delayed)
+                1 URG only packets
+                37 window probe packets
+                0 window update packets
+                17 control packets
+        38115 packets received
+                36149 acks (for 17163334 bytes)
+                836 duplicate acks
+                0 acks for unsent data
+                2044 packets (5868 bytes) received in-sequence
+                126 completely duplicate packets (442 bytes)
+                2 packets with some dup. data (2 bytes duped)
+                20 out-of-order packets (0 bytes)
+                0 packets (0 bytes) of data after window
+                0 window probes
+                0 window update packets
+                0 packets received after close
+                0 discarded for bad checksums
+                0 discarded for bad header offset fields
+                0 discarded because packet too short
+        0 connection requests
+        24 connection accepts
+        24 connections established (including accepts)
+        35 connections closed (including 0 drops)
+        3 embryonic connections dropped
+        30291 segments updated rtt (of 31432 attempts)
+        1155 retransmit timeouts
+                0 connections dropped by rexmit timeout
+        0 persist timeouts
+        0 keepalive timeouts
+                0 keepalive probes sent
+                0 connections dropped by keepalive
+udp:
+        0 incomplete headers
+        0 bad data length fields
+        0 bad checksums
+        542 no ports
+        442 (arrived as bcast) no ports
+#
+
+
+12/2
+- telnet works, very slow response though. Maybe something
+  about not getting to the xu ring buffers that I should.
+  needs some tuning too, and lots more error checking. and
+  some of the code already needs a major rewrite.
+- some more minor changes - most notably to also serve
+  xmit packets without pdmd. That makes a real difference.
+- not completely stable yet - notably there's an issue
+  with connecting to the AP. But that might well be my
+  AP. The esp at some point doesn't want to connect any
+  more, but after a power cycle of the AP things are ok.
+  Maybe try to set up an AP that has accessible logs.
+
+Test run:
+1) telnet and make kernel
+2) ftp and get or put /usr/src/games/scene
+3) telnet and run top
+4) telnet and run vmstat 1 10000
+5) telnet and keep an eye on things, the occasional
+  netstat -s.
+6) occasionally running a flood ping
+yeah, all of that worked simultaneously...
+although netstat shows signs of buffer overflows now.
+
+# netstat -s
+ip:
+        50528257 total packets received
+        628621312 bad header checksums
+        0 with size smaller than minimum
+        0 with data size < data length
+        0 with header length < data size
+        0 with data length < header length
+        0 fragments received
+        196608 fragments dropped (dup or out of space)
+        0 fragments dropped after timeout
+        196608 packets forwarded
+        0 packets not forwardable
+        24117248 redirects sent
+icmp:
+        0 calls to icmp_error
+        0 errors not generated 'cuz old message was icmp
+        Output histogram:
+                #1: 2714107904
+                source quench: 4980736
+        0 messages with bad code fields
+        0 messages < minimum length
+        0 bad checksums
+        0 messages with bad length
+        Input histogram:
+                echo reply: 2714107904
+                #1: 524288
+                source quench: 4980736
+                #9: 2714107904
+        0 message responses generated
+
+
+[root@i5 ~/wnet/pdp11]# ping -f 10.1.0.172
+PING 10.1.0.172 (10.1.0.172) 56(84) bytes of data.
+.......^C
+--- 10.1.0.172 ping statistics ---
+3822 packets transmitted, 3815 received, 0% packet loss, time 57096ms
+rtt min/avg/max/mdev = 10.415/35.722/304.270/27.215 ms, pipe 19, ipg/ewma 14.942/35.411 ms
+
+
+12/1
+- started the rework of the esp32/xu code. Made a nice start,
+  the spi looks stable and reliable.
+  however, then the testbed stopped cooperating. bsd211 is
+  not attaching the de interface, and after four or so
+  hours of debugging I'm still not sure what the actual
+  problem is. Meantime everything from plain hangs,
+  spinlocks for the interrupt bits, and even stupid mistakes.
+  totally fed up with this.
+- ok managed to get some success eventually. looks like
+  the receive path is starting to work - but the os doesn't
+  recognise the frames yet. Probably a header or something
+  that needs to be added or removed.
+
+# w
+ 12:55am  up 55 mins,  5 users,  load averages: 0.44, 1.05, 1.24
+User            tty       login@  idle   JCPU   PCPU  what
+root            console  12:01am    54      2      1  -sh
+root            ttyp0    12:04am    51     19     19  vmstat 1 10000
+root            ttyp1    12:05am        33:44      1  -sh
+root            ttyp2    12:06am     6   8:55   1:20  top
+root            ttyp3    12:16am           48      2  w
+#
+
+
+11/30
+- merged old wnet code into new branch from current master
+- contrary from what I remembered, it sort-of works for small
+  packets - perfectly doable for interactive telnet and such.
+  but with lots of error messages ;-)
+  meantime espressif has updated esp-hosted, and there are
+  a couple clues in there that reinforce the last findings on
+  the old esp-hosted branch. To wit:
+- there's resource starvation on both sides; the overhead
+  of the 18-byte seems to be too much. And it makes sense
+  to have the esp side work with queues and tasks for each
+  stream. Easier code, and lots easier priority management.
+- it also probably makes sense to add another signal to show
+  the esp has data.
+- so the plan is to rework the code to use large spi
+  transfers and more tasking. Essentially a simplified
+  version of esp-hosted-fg, on which then the extras that I
+  want for pdp2011 can then be added.
+
+
+--------------------- (on new branch wnet)
+
+11/29
+- after a long time of deep consideration, I finally went forward
+  with the mncad channel type mechanism. It is now outside of the
+  mncad component, mostly outside of the board-specific adc
+  component, and instead takes the form of two tiny components
+  that store the gain bits and multiplex them out for further
+  use if and when appropriate (as in, when someone adds an actual
+  thermocouple that can use gain settings, or even a preamp).
+  seems like the most elegant solution - it's flexible, it doesn't
+  take space when it's not being used. The only drawback is more
+  visible complexity, but not a lot of that...
+  ah and one limitation: groups of 8 channels only. since all
+  mnc modules except mncag are 8 or 16 channels, that should be
+  acceptable.
+
+
+10/25
+- added event and reply signals to miodi, forwarding to the avr
+  via the address byte and the avr to work with a wildcard twi
+  address. seems to work fine. How to deal with the polarity
+  switches on the module though.
+
+
+10/12
+- adding pulse stretching to mncdi
+
+
+10/7
+- some more work on miodi - actually input the retrieved value,
+  order the bytes, and some work on the avr code to invert the
+  sense of the switches on the test board.
+
+
+10/6
+- adding miodi - the mncdi input driver towards an avr based i/o
+  expander, analogous to the miodo. Now works based on constant
+  polling, no capability for handshaking yet.
+
+
+9/30
+- reworked de0cv to use the work library and the std sdram component
+- and c5g
+- and de0
+- and the de1 variants: de1, de1dram, de1vt
+- and de2 (compiles, but hasn't been tested)
+- and the vt component
+- removed s3b200 board directory - there's no way it could still build
+  for the current version. It belongs in the archives.
+- added an input filter for st1, st2 in mnckw
+- added output signal stretching to mnckw, and also the option to
+  invert the signals from the normal negative pulse
+- changed have_mncdiloopback to have_mncdi_loopback
+
+
+9/29
+- did a silly test: added a 5th mncdo. Works with VMNE, and it gives
+  an interesting message, even:
+EXPECTED INTERRUPT AT 470 RECEIVED INTERRUPT AT 360
+  so apparently the range for the vectors isn't contiguous. But still
+  the minc basic doesn't want to play with it. So I reverted the change.
+- renamed all of the minc modules on the unibus component to be more
+  consistent. Everything now has the form of mncXXY_ZZZ - XX is the
+  unit abbreviation, Y is the unit number from 0, ZZZ is the signal
+  name. Internal variables similar, but without the mnc prefix.
+
+
+9/3
+- after yesterday's tinkering, this simpler solution occurred to me:
+  still feels like some of the error messages might point to a bug
+  in minc basic ;-)
+TEST9E               00:04:51
+
+10 DIM A(100)
+20 K=0
+30 FOR I=0 TO 99
+40 IF K>32766 THEN  GO TO 70
+50 K=K+1
+60 GO TO 80
+70 K=-32768
+80 A(I)=K
+90 NEXT I
+100 DOUT(,A(),100)
+110 GO TO 30
+
+or further improved version:
+TEST9E               00:23:36
+
+10 DIM A(2000)
+20 L=2000
+30 K=0
+40 FOR I=0 TO L-1
+50 IF K>32766 THEN  GO TO 80
+60 K=K+1
+70 GO TO 90
+80 K=-32768
+90 A(I)=K
+100 NEXT I
+110 DOUT(,A(),L)
+120 GO TO 40
+
+
+
+9/2
+- did some work on the miodo output driver and associated
+  atmega4809 code. It already worked fine for single output words,
+  but now it also works for synchronous output with output strobes
+  and replies. Well sort-of, the avr still times the reply, it's
+  not fully functional yet.
+- not sure how to incorporate the avr code into the source repo
+  yet either. Should do that soon though.
+- and a weird error. The test9c below halts at the point that the
+  value wraps around to negative. I'd kind of expected that to
+  happen on the addition in line 30, but it bombs out on line 50:
+  ?MINC-F-Value exceeds valid range for argument at line 50
+  Seems like an error to me? esp since it happily handles
+  negative values, given the -1000 start.
+- and added test9 here for completeness - just a simple running
+  blinkenlight.
+
+test9:
+10 T=1/4
+20 I=1
+30 DOUT(,I,,T)
+40 IF I<0 THEN 20
+50 I=I*2
+60 IF I<32767 THEN 30
+70 I=-32768
+80 GO TO 30
+
+test9c:
+10 DIM A(100)
+15 K=-1000
+20 FOR I=0 TO 100
+30 A(I)=I+K
+40 NEXT I
+50 DOUT(,A(),100)
+55 K=K+100
+60 GO TO 20
+
+- Ah, but of course. Minc basic assumes floating point variables,
+  so it is correct to reject the 32767+1 argument. The more correct
+  source would be:
+10 DIM A%(100)
+20 K%=0
+30 FOR I%=0 TO 100
+40 A%(I%)=I%+K%
+50 NEXT I%
+60 DOUT(,A%(),100)
+70 K%=K%+100
+80 GO TO 30
+and that gives:
+?MINC-W-Value of integer expression not in range -32768 to +32767 at line 40
+- ok, I need to think how to find an elegant solution how to do
+  this ;-) that's why there were radio programmes back in the day,
+
+
+6/18
+- finally received the pcbs from china - took over a month and a
+  half. Anyway, the do thing worked without any surprise, but the
+  kw needs some changes. For instance, the st and clkov output
+  leds aren't useful for showing 200ns pulses. Not sure yet how to
+  solve that - remove the leds? add a microcontroller, a oneshot,
+  analog hardware? lengthen the pulse in the fpga?
+- ah yes, a simple test program:
+10 SCHMITT(,200,100)
+20 REM
+30 GO TO 20
+200 PRINT ".";
+210 RETURN
+  and should add the second schmitt to that too ;-)
+
+
+6/6
+- checked yesterdays work against zvtn, needed some small changes
+  because the window was now too large. Tried to find a workaround
+  for the strip chart update ghosting, but no success - the last
+  solution kind of works, but it still looks ugly.
+
+
+6/5
+10 DIM X(512)
+20 FOR I=0 TO 510 STEP 2
+30 X(I)=.5
+31 X(I+1)=.6
+40 NEXT I
+45 X(0)=.55
+46 X(511)=.45
+47 X(510)=.65
+48 X(509)=.55
+50 WINDOW(,0,0,511,1)
+60 GRAPH("-grid",511,,X(0))
+
+- this program should display two rows of dots, starting with
+  a dot in the middle, and ending with a dot in the middle and
+  two to the side. The last one to the side is what I can't
+  get to work - which implies that MINC software only supports
+  511 data points, not 512. Should check this against real
+  hardware.
+- oh and aligned the vt105 graph output, and enable datapoints
+  509 and 510 to come out.
+
+
+6/4
+- changed the default for /03 to include eis and fis
+- set up the boot roms to all be included and enabled by a
+  setting on the unibus component - so all project files can now
+  be the same universally.
+- and changed the minc boot to have the low rom at 175000 so
+  it doesn't interfere with the vkal test - which now passes.
+  not the original plan to do it like this, but it works, and
+  it's probably more elegant than all the alternatives.
+- 'no auto gain channel permitted' for ain in minc basic - a
+  reminder that autogain is only a good idea if it is really
+  used.
+
+
+6/3
+- finished reworking all rom/ram component generation, including
+  getting rid of the old t-numbers. There's no testing in any of
+  these after all.
+
+
+2022/6/02
+- reworked the boot rom generation; moved away from the too
+  cryptic T number scheme and changed into -minc, -pdp2011,
+  -odt boot roms. Changed the templating setup for the
+  macro sources for the bootroms to use a designated template
+  for each source. Changed the unibus component to work with
+  that, and to take a parameter to select the active bootrom.
+  Why? well, it's a lot easier this way, no more changing the
+  project definitions. And also, there's the thing that vkal
+  needs the low rom to be disabled, and this is the way to
+  elegantly do just that.
+- removed m9312h40 from the makefile - it is the reduced size
+  blockram that would fit in the s3board-200. Won't now though.
+  Still, reworked the t1 and t2 templates to the new .mem setup.
+- removed vgafont.vhd from git repo, added a template .mem for
+  the component, and changed the makefile to generate it
+
+
+5/27
+- fixed the jkdc issue for ldcfd/ldcdf. Should it be iffed
+  under a have_sillies?
+
+
+5/26
+- ok vibb passes. with some very questionable logic for sure
+  but hey, it's a start.
+  1) none of the actual external signals are implemented
+  2) the interrelation between the ibs and ibd bits is
+     questionable - taken from the text in the ug manual.
+     might be better to take that from the schematic, that
+     should be doable and will probably be closer to the
+     real thing
+  3) the timing of the signals is very probably wrong - and
+     might not pass vibb if I'd make them right.
+  4) not sure about the trick I needed to pass the interrupt
+     tests - the interrupt controller now resets the bits
+     that caused the interrupt. But they seem to be transient
+     signals in the real thing, although I don't see why for
+     all of them.
+
+
+5/24
+- found the solution to yesterday's thing with jkdd. In the
+  fix I had put the logic to trigger before the mul instruction
+  would run - leaving only a very few cycles open for the
+  interrupt to occur in. But in the right place it works a
+  charm.
+- adding ibv11 because why not. well, a reason would be that
+  it's a bit weird and complex, and I don't have any ieee488
+  stuff to test or play with. There's a test for it though,
+  vibb, and that's on most of the minc chains.
+
+
+5/23
+- checked a fix for jkdd - it's one of those interruptible
+  fpu checks. But this one is quite timing dependent, and
+  I'm not sure how to make it pass reliably. The test doesn't
+  really hang though, contrary to what I thought before. It
+  just takes way too long before it gives up on trying to
+  interrupt the mulf it uses. Setting the console speed to
+  38400 increases the chance it'll pass - but, the logic
+  of the test makes each successive test harder too, so
+  it'll hang in the end. 38400 seems the sweet spot, higher
+  than that doesn't seem to work at all.
+
+
+5/21
+- managed a tiny fix in the mmu configuration for /23 - to
+  include the unibus map. It doesn't make sense for a /23
+  system, but the f11 chip has it, and the jkda tests for it.
+
+
+2022/05/20
+- thought to improve the kl11 to the point that it would
+  be compatible with the dlv11 for minc. and got it, mostly
+  although there seems to be something timing dependent in
+  the break core - it works at 1200bps, not sure if it does
+  for 9600. But that might also be the test.
+  One thing left open, and I'm probably not going to fix it:
+TEST # 000021,ERROR #    250,PC = 007420,CSR: 176500,VECTOR: 000300
+  the error is that the interrupts are not occurring in the
+  order that the test expects them - for pdp2011 they will
+  come by device, and the test expects first all receive, then
+  all transmit grouped by dlv11.
+
+11/30
+- made the ad channels somewhat configurable. The group
+  of 8 thing doesn't work very elegantly in practice though,
+  especially for the ag channels - they're now also grouped
+  by 8 for volts, resistance and amps. Hmm. Need to think on
+  that.
+- oh yes, and the tc had a surprise. It's type is not 1, but
+  instead it is the only module that holds a 1 after it is
+  written to it. It actually has 4 gain bits...
+.R VMNA??
+VMNAC1.BIC
+A  I0
+CVMNA-C    MNCAD (A/D) DIAGNOSTIC
+
+SET MNCAD (A/D) FRONT PANEL SWITCHES TO "TEST"
+SET ALL MNCAG (PREAMP) RANGE SWITCHES TO THE "P" POSITION
+TYPE Y FOR YES, N FOR NO
+
+IS THE MNCAD (A/D) TEST MODULE CONNECTED ? N
+
+IS A MNCAM (MUX) TEST MODULE CONNECTED ? N
+
+IS A MNCAG (PREAMP) TEST MODULE CONNECTED ? N
+
+IS A MNCTP (TC AMP) TEST MODULE CONNECTED ? N
+
+IS A MNCKW (CLOCK) IN THE SYSTEM ? Y
+
+IS THE CONSOLE TERMINAL A VT55 OR VT105 ? N
+
+L = LOGIC TESTS
+W = WRAPAROUND ANALOG TESTS
+A = AUTO TESTS
+Q = QUIET AUTO TESTS
+N = NOISE TESTS ON SELECTED CHANNELS
+D = DIFFERENTIAL LINEARITY AND RELATIVE ACCURACY
+M = COMMON MODE REJECTION TEST FOR MNCAG CHANNELS
+S = SETTLING TEST ON SELECTED CHANNELS
+P = PRINT CONVERTED ANALOG VALUE LOOP
+C = CALIBRATION LOOP FOR MNCAD
+F = FRONT PANEL MODE AND GAIN SWITCH LOOP FOR MNCAG
+T = TEST MODULE VALUE VERIFY LOOP FOR MNCAG
+I = INCOMMING INSPECTION TEST FOR MNCTP
+X = READ-WRITE GAIN BITS LOOP
+B = BASE AND VECTOR ADDRESS CHANGES
+G = GET NEW SWITCH REGISTER VALUE
+H = HELP THE OPERATOR AND RETYPE THIS LIST   �
+TYPE THE "TEST CHARACTER" THEN DEPRESS "RETURN KEY"  L
+
+PROGRAM DETECTED      1 MNCAD (A/D)'S
+
+MNCAD (A/D) UNIT #0
+ 0 -  7 SINGLE ENDED
+10 - 17 TC AMP
+20 - 23 DIFFERENTIAL
+24 - 27 DIFFERENTIAL
+30 - 33 PREAMP
+34 - 37 PREAMP
+40 - 43 PREAMP
+44 - 47 PREAMP
+50 - 53 PREAMP
+54 - 57 PREAMP
+60 - 67 SINGLE ENDED
+70 - 77 SINGLE ENDED
+
+CHECK SYSTEM CONFIGURATION - TOO MANY MNCAG DETECTED
+�
+END PASS #     1
+
+
+11/26
+- fixed a couple errors, now the ag-capable ad passes vmna.
+  the trick was mainly in the timing. Not anywhere near
+  close to what I think is a useful implementation, but
+  committing the whole thing to version management now.
+  New component: mincdrv/adc.vhd; dummy adc multiplexer
+  for boards that don't have any adc component (and hence
+  only need the multiplexer). That was also the source
+  of some grief; the multiplexer is infinitely fast, and
+  apparently vmna expects some delay for at least the
+  first 8 channels. At least, adding a delay fixes a
+  couple weird errors.
+MNCAD (A/D) UNIT #0
+ 0 -  7 SINGLE ENDED
+10 - 17 SINGLE ENDED
+20 - 27 SINGLE ENDED
+30 - 37 SINGLE ENDED
+40 - 43 PREAMP
+44 - 47 PREAMP
+50 - 53 PREAMP
+54 - 57 PREAMP
+60 - 67 SINGLE ENDED
+70 - 77 SINGLE ENDED
+- next up is making the thing somewhat configurable. I'm
+  now thinking of groups of 8 channels that can be single,
+  double, preamp. Not sure if TC makes any sense, haven't
+  found any doc on those yet. Should try it with the minc
+  basic, maybe the conversion is easy to spot.
+
+
+11/24
+- spent some time over the last week digging into how the
+  analog mnc modules - mngam, mngtc, mngag are identified
+  to the software, and maybe most interestingly how the
+  gain bits in mngag are programmed. That started with the
+  new listings for vmna that Joerg Hoppe posted this week.
+  One of the confusing things is though that while the
+  vmna listing always uses byte access for the side channel
+  to set the gain bits, it turns out that the minc software
+  uses word accesses - and still expects the side channel to
+  respond to that.
+  Since the side channel uses the escape code of o'77' in the
+  channel id, this seems to mean that channel o'77' wasn't
+  actually used - well, with the 8-slot limit, it would've
+  been impossible in practice.
+  Needs a lot more testing though, and not sure yet how or if
+  any of this new knowledge will find it's way into the actual
+  minc peripherals. I'm really not sure how to work this into
+  a practical kind of configuration thing, for one, with single-
+  ended, differential, TP, and AG channels - and each taking
+  up 4 or 8 slots. And how should the AG channels have their
+  gain setting stored? not within the mncag component but
+  somewhere closer to the actual hardware, I'd think. Needs
+  some more thinking, that's obvious.
+
+
+11/5
+- ok, vdla needs wraparound (ie, connecting rx to tx) for
+  ports other than the console. And it won't run with just
+  one console port, it tests for a couple signals that are
+  not in the current kl11. It'll need some time - and maybe
+  I won't go into it at all. There is sort of a point though,
+  the serial stuff is missing from the minc as things stand
+  now.
+
+
+11/4
+- checked why vkal doesn't run, that turns out to be the
+  low m9312 rom; disable that and it passes without error.
+  maybe rework the minc boot to use only the upper rom?
+  would fit in with the earlier idea to make the boot roms
+  configurable.
+- vdla crashes and blocks several xxdp chains from working.
+  investigate that next? Same with vkae, maybe.
+- ah yes, finally thought to run the rt11v3 rk image on
+  the hardware configured as 11/03. Here it is:
+
+.SHOW CONFIG
+
+RT-11SJ    V03B-00
+
+Booted from RK0:
+Resident Monitor base is 150476
+USR is set SWAP
+TT is set NOQUIET
+Indirect file abort level is ERROR
+Indirect file nesting depth is 3
+
+LSI-11 Processor
+Extended Instruction Set (EIS)
+Floating Instruction Set (FIS)
+60 Cycle System Clock
+
+No SYSGEN options enabled
+
+- and while I thought of it - the idea of having a standard
+  RT-11 image on RK0 and a MINC image on RK1 seems to work
+  nicely. Boot up std RT, then issue boot rk1: when it's time
+  to go into minc, and everything works as expected.
+
+
+10/25
+- hmm. the thing that breaks vkaa is... mfps/mtps. Both need
+  to pass all bits, no model filtering or the test will break.
+  But then vkac is back to lots of errors... sigh. It doesn't
+  do anything obvious except mfps/mtps - so how should the
+  inappropriate psw bits be modelfiltered then?
+- mmmmkay. what works is to have the fis insns reset the
+  6 and 5 bits when storing the fis result. Ugly, but it passes
+  all vkac issues - even the leftover 511 issue. And vkaa
+  passes cleanly too.
+- and vkab too, after reverting yesterdays ill advised change
+  to rti.
+- fixed 03 to trap to 4 on mode-0 jmp. Now passes vkad.
+
+
+10/24
+- vkac now passes the fadd and fsub tests - but had to make some
+  changes besides adding the new stuff, and vkaa and vkab now hang.
+  Will add fmul and fdiv first, then have a look at those issues.
+- vkac now passes all fmul and fdiv tests too - oueff, that was
+  easy. There's just one thing left:
+  000511  014210 000740 177777 014106 000011
+END PASS
+  and I'm not sure how to fix that. The test expects a weird ps,
+  but after a stack trap - so the core hasn't even gotten to the
+  arguments yet. So the ps cannot be determined by the input, and
+  it's not really based on a previous state either. Tricksing it
+  would likely be very artificial...
+  vkab now fails in a different place, so I did cause a new problem
+  with the fis work. otoh, everything is about ps and traps. so
+  maybe I should try to work through vkad first, and see about
+  these things after that. Tomowwow.
+
+
+10/22
+- started to have a look at the 11/03 tests,
+  vkaa: passes after an easy fix in the mmu: don't odd abort for '03
+  vkab: hmm. test 307 hangs; it loops on trying to get an ash
+        instruction interrupted before it completes. But pdp2011
+        doesn't do that - shame, only the last two tests. Can I tricks
+        it? Ah yes I can. It's a bit artificial, but hey. Added
+        have_sillies to mask the artificiality, and made it work
+        also for the old zkdj thing.
+   Where is this going? it is all in preparation for adding the
+   FIS instructions - in theory making for a much smaller machine
+   that would still run MINC. That's all.
+
+
+10/20
+- cleaned up the minc de0n top somewhat. Need to redo the same
+  for the other de0n boards too. Made a mistake in the reset
+  logic, lots of hasty commits. Oh well.
+
+
+10/9
+- started reworking the top.vhd files in the board directories
+  to use a package file for the components. Makes the top files
+  a lot more readable.
+- made a new component for the sdram driver - it was almost all
+  the same for all boards, and the few exceptions are easily
+  managed.
+- reworked the de10l board directory - took all of the minc
+  stuff out, since that should be in the minc-de10l dir.
+
+
+5/31
+- removed a superfluous + in rh11, found by Steve Falco
+
 5/24
 - finally managed to get a 2040 cylinder rm06 working for rsx,
   probably mostly through mistakes and uncooperative hardware

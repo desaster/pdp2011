@@ -1,5 +1,6 @@
-create_clock -period 20.000ns [get_ports clkin]
+create_clock -period 83.333ns [get_ports clkin]
 create_clock -period 100.000ns cpuclk
+create_clock -period 100.000ns sdram:sdram0|cpuclk
 create_clock -period 40.000ns unibus:pdp11|rh11:rh0|sdspi:sd1|clk 
 create_clock -period 40.000ns unibus:pdp11|rk11:rk0|sdspi:sd1|clk 
 create_clock -period 40.000ns unibus:pdp11|rl11:rl0|sdspi:sd1|clk 

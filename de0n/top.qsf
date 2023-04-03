@@ -57,7 +57,7 @@ set_global_assignment -name CRC_ERROR_OPEN_DRAIN OFF
 # ========================
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 11.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "00:17:06  AUGUST 26, 2011"
-set_global_assignment -name LAST_QUARTUS_VERSION "20.1.0 Lite Edition"
+set_global_assignment -name LAST_QUARTUS_VERSION "22.1std.0 Lite Edition"
 
 # Pin & Location Assignments
 # ==========================
@@ -133,10 +133,13 @@ set_location_assignment PIN_M1 -to sw[0]
 set_location_assignment PIN_T11 -to cts
 set_location_assignment PIN_T12 -to rts
 
-set_location_assignment PIN_A14 -to xu_cs
-set_location_assignment PIN_E15 -to xu_miso
-set_location_assignment PIN_B16 -to xu_mosi
-set_location_assignment PIN_C14 -to xu_sclk
+set_location_assignment PIN_C15 -to xu_cs
+set_location_assignment PIN_C16 -to xu_miso
+set_location_assignment PIN_A14 -to xu_mosi
+set_location_assignment PIN_D16 -to xu_sclk
+set_location_assignment PIN_B16 -to xu_srdy
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to xu_srdy
+set_location_assignment PIN_C14 -to xu_debug_tx
 
 set_location_assignment PIN_T13 -to panel_row[2]
 set_location_assignment PIN_T14 -to panel_row[1]
@@ -172,44 +175,75 @@ set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[2]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[1]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[0]
 
-set_global_assignment -name VHDL_FILE ../mncdo.vhd
-set_global_assignment -name VHDL_FILE ../mncdi.vhd
-set_global_assignment -name VHDL_FILE pmodda2.vhd
-set_global_assignment -name VHDL_FILE de0adc.vhd
-set_global_assignment -name VHDL_FILE ../mncaa.vhd
-set_global_assignment -name VHDL_FILE ../mnckw.vhd
-set_global_assignment -name VHDL_FILE ../mncad.vhd
-set_global_assignment -name VHDL_FILE ../sdspi.vhd
-set_global_assignment -name VHDL_FILE ../m9312h47.vhd
-set_global_assignment -name VHDL_FILE ../m9312l47.vhd
-set_global_assignment -name VHDL_FILE ../dr11c.vhd
-set_global_assignment -name VHDL_FILE ../panelos.vhd
-set_global_assignment -name VHDL_FILE ../paneldb.vhd
-set_global_assignment -name VHDL_FILE ../paneldriver.vhd
-set_global_assignment -name SDC_FILE de0n.sdc
-set_global_assignment -name VHDL_FILE ../xu.vhd
-set_global_assignment -name VHDL_FILE ../xubl.vhd
-set_global_assignment -name VHDL_FILE ../xubm.vhd
-set_global_assignment -name VHDL_FILE ../xubrt45.vhd
-set_global_assignment -name VHDL_FILE ../kl11.vhd
-set_global_assignment -name VHDL_FILE ../rh11.vhd
-set_global_assignment -name VHDL_FILE top.vhd
-set_global_assignment -name VHDL_FILE ../unibus.vhd
-set_global_assignment -name VHDL_FILE ../rl11.vhd
-set_global_assignment -name VHDL_FILE ../rk11.vhd
-set_global_assignment -name VHDL_FILE ../mmu.vhd
-set_global_assignment -name VHDL_FILE ../kw11l.vhd
-set_global_assignment -name VHDL_FILE ../fpuregs.vhd
-set_global_assignment -name VHDL_FILE ../csdr.vhd
-set_global_assignment -name VHDL_FILE ../cr.vhd
-set_global_assignment -name VHDL_FILE ../cpuregs.vhd
-set_global_assignment -name VHDL_FILE ../cpu.vhd
-set_global_assignment -name QIP_FILE pll.qip
-set_global_assignment -name SOURCE_FILE Spf1.spf
-set_global_assignment -name SOURCE_FILE db/top.cmp.rdb
 
 
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
+
+
+
+set_global_assignment -name VHDL_FILE pmodda2.vhd
+set_global_assignment -name VHDL_FILE de0adc.vhd
+set_global_assignment -name SDC_FILE de0n.sdc
+set_global_assignment -name VHDL_FILE top.vhd
+set_global_assignment -name QIP_FILE pll.qip
+set_global_assignment -name SOURCE_FILE Spf1.spf
+set_global_assignment -name SOURCE_FILE db/top.cmp.rdb
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
+set_global_assignment -name VHDL_FILE ../unibus.vhd
+set_global_assignment -name VHDL_FILE ../pdp2011.vhd
+set_global_assignment -name VHDL_FILE ../sdram.vhd
+set_global_assignment -name VHDL_FILE ../panelos.vhd
+set_global_assignment -name VHDL_FILE ../paneldb.vhd
+set_global_assignment -name VHDL_FILE ../paneldriver.vhd
+set_global_assignment -name VHDL_FILE ../cpu.vhd
+set_global_assignment -name VHDL_FILE ../cpuregs.vhd
+set_global_assignment -name VHDL_FILE ../fpuregs.vhd
+set_global_assignment -name VHDL_FILE ../cr.vhd
+set_global_assignment -name VHDL_FILE ../mmu.vhd
+set_global_assignment -name VHDL_FILE ../kl11.vhd
+set_global_assignment -name VHDL_FILE ../kw11l.vhd
+set_global_assignment -name VHDL_FILE ../csdr.vhd
+set_global_assignment -name VHDL_FILE ../rh11.vhd
+set_global_assignment -name VHDL_FILE ../rl11.vhd
+set_global_assignment -name VHDL_FILE ../rk11.vhd
+set_global_assignment -name VHDL_FILE ../sdspi.vhd
+set_global_assignment -name VHDL_FILE ../dr11c.vhd
+set_global_assignment -name VHDL_FILE ../xu.vhd
+set_global_assignment -name VHDL_FILE ../xubl.vhd
+set_global_assignment -name VHDL_FILE ../xubm.vhd
+set_global_assignment -name VHDL_FILE ../xubr.vhd
+set_global_assignment -name VHDL_FILE ../xubf.vhd
+set_global_assignment -name VHDL_FILE ../xubw.vhd
+set_global_assignment -name VHDL_FILE ../mncdo.vhd
+set_global_assignment -name VHDL_FILE ../mncdi.vhd
+set_global_assignment -name VHDL_FILE ../mncaa.vhd
+set_global_assignment -name VHDL_FILE ../mnckw.vhd
+set_global_assignment -name VHDL_FILE ../mncad.vhd
+set_global_assignment -name VHDL_FILE ../ibv11.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/miodi.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/miodo.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/mncadagg.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/mncadtpg.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodcolor.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodda2.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodda4.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodhygro.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodnav.vhd
+set_global_assignment -name VHDL_FILE ../vt.vhd
+set_global_assignment -name VHDL_FILE ../vtbr.vhd
+set_global_assignment -name VHDL_FILE ../vga.vhd
+set_global_assignment -name VHDL_FILE ../vgacr.vhd
+set_global_assignment -name VHDL_FILE ../vgafont.vhd
+set_global_assignment -name VHDL_FILE ../ps2.vhd
+set_global_assignment -name VHDL_FILE "../m9312h-pdp2011.vhd"
+set_global_assignment -name VHDL_FILE "../m9312l-pdp2011.vhd"
+set_global_assignment -name VHDL_FILE "../m9312h-odt.vhd"
+set_global_assignment -name VHDL_FILE "../m9312l-odt.vhd"
+set_global_assignment -name VHDL_FILE "../m9312h-minc.vhd"
+set_global_assignment -name VHDL_FILE "../m9312l-minc.vhd"
+

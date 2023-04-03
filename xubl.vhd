@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -41,10 +41,12 @@ entity xubl is
       bus_master_control_dato : out std_logic;
       bus_master_nxm : in std_logic;
 
-      xu_cs : out std_logic;
-      xu_mosi : out std_logic;
-      xu_sclk : out std_logic;
-      xu_miso : in std_logic;
+      xubl_cs : out std_logic;
+      xubl_mosi : out std_logic;
+      xubl_sclk : out std_logic;
+      xubl_miso : in std_logic;
+
+      have_xu_enc : in integer range 0 to 1 := 0;
 
       reset : in std_logic;
       xublclk : in std_logic;
@@ -94,11 +96,11 @@ begin
 
 -- regular bus interface
 
-   base_addr_match <= '1' when base_addr(17 downto 4) = bus_addr(17 downto 4) else '0';
+   base_addr_match <= '1' when have_xu_enc = 1 and base_addr(17 downto 4) = bus_addr(17 downto 4) else '0';
    bus_addr_match <= base_addr_match;
 
-   xu_cs <= cs;
-   xu_sclk <= clk when cs = '0' else '0';
+   xubl_cs <= cs;
+   xubl_sclk <= clk when cs = '0' else '0';
 
 -- regular bus interface : handle register contents and dependent logic
 
@@ -106,69 +108,56 @@ begin
    begin
       if clk = '1' and clk'event then
          if reset = '1' then
-            npr <= '0';
+            if have_xu_enc = 1 then
+               npr <= '0';
 
-            xubl_xf <= (others => '0');
-            xubl_xl <= (others => '0');
-            xubl_rt <= (others => '0');
-            xubl_rl <= (others => '0');
+               xubl_xf <= (others => '0');
+               xubl_xl <= (others => '0');
+               xubl_rt <= (others => '0');
+               xubl_rl <= (others => '0');
 
-            run <= '0';
+               run <= '0';
+
+               bus_dati <= (others => '0');
+
+            else
+               npr <= '0';
+            end if;
 
          else
 
--- there appears to never be a need to read back these values
+            if have_xu_enc = 1 then
+               if base_addr_match = '1' and bus_control_dato = '1' then
+                  case bus_addr(3 downto 1) is
+                     when "000" =>
+                        xubl_xf <= bus_dato;
 
---             if base_addr_match = '1' and bus_control_dati = '1' then
---
---                case bus_addr(3 downto 1) is
---                   when "000" =>
---                      bus_dati <= xubl_xf;
---
---                   when "001" =>
---                      bus_dati <= xubl_xl;
---
---                   when "010" =>
---                      bus_dati <= xubl_rt;
---
---                   when "011" =>
---                      bus_dati <= xubl_rl;
---
---                   when others =>
---                      bus_dati <= (others => '0');
---
---                end case;
---             end if;
---
-            if base_addr_match = '1' and bus_control_dato = '1' then
-               case bus_addr(3 downto 1) is
-                  when "000" =>
-                     xubl_xf <= bus_dato;
+                     when "001" =>
+                        xubl_xl <= bus_dato(7 downto 3);
+                        run <= '1';
 
-                  when "001" =>
-                     xubl_xl <= bus_dato(7 downto 3);
-                     run <= '1';
+                     when "010" =>
+                        xubl_rt <= bus_dato;
 
-                  when "010" =>
-                     xubl_rt <= bus_dato;
+                     when "011" =>
+                        xubl_rl <= bus_dato(7 downto 3);
 
-                  when "011" =>
-                     xubl_rl <= bus_dato(7 downto 3);
+                     when others =>
+                        null;
 
-                  when others =>
-                     null;
+                  end case;
+               end if;
 
-               end case;
-            end if;
-
-            if run = '1' then
-               npr <= '1';
-               if npg = '1' then
-                  if cmd_state = cmd_done then
-                     run <= '0';
-                     npr <= '0';
+               if run = '1' then
+                  npr <= '1';
+                  if npg = '1' then
+                     if cmd_state = cmd_done then
+                        run <= '0';
+                        npr <= '0';
+                     end if;
                   end if;
                end if;
+
             end if;
 
          end if;
@@ -191,91 +180,96 @@ begin
    begin
       if xublclk = '1' and xublclk'event then
          if reset = '1' then
-            bus_master_addr <= (others => '0');
-            bus_master_dato <= (others => '0');
-            bus_master_control_dati <= '0';
-            bus_master_control_dato <= '0';
+            if have_xu_enc = 1 then
+               bus_master_addr <= (others => '0');
+               bus_master_dato <= (others => '0');
+               bus_master_control_dati <= '0';
+               bus_master_control_dato <= '0';
 
-            cs <= '1';
+               cs <= '1';
+            end if;
 
          else
-            if run = '1' then
-               if npg = '1' then
+            if have_xu_enc = 1 then
+               if run = '1' then
+                  if npg = '1' then
 
-                  case cmd_state is
+                     case cmd_state is
 
-                     when cmd_start =>
-                        rt <= xubl_rt;
-                        xf <= xubl_xf + 2;
-                        xl <= xubl_xl(7 downto 3) & "000";
-                        rl <= xubl_rl(7 downto 3) & "000";
+                        when cmd_start =>
+                           rt <= xubl_rt;
+                           xf <= xubl_xf + 2;
+                           xl <= xubl_xl(7 downto 3) & "000";
+                           rl <= xubl_rl(7 downto 3) & "000";
 
-                        bitcount <= 15;
-                        bus_master_addr <= "00" & xubl_xf;
-                        bus_master_control_dati <= '1';
-                        cmd_state <= cmd_xmit;
-
-                     when cmd_xmit =>
-                        bitcount <= bitcount - 1;
-                        if bitcount = 15 then
-                           bus_master_control_dati <= '0';
-                           work <= bus_master_dati(14 downto 0) & bus_master_dati(15);
-                           xu_mosi <= bus_master_dati(7);
-                           cs <= '0';
-                        else
-                           xu_mosi <= work(7);
-                           work <= work(14 downto 0) & work(15);
-                           if bitcount = 0 then
-                              bitcount <= 15;
-                              bus_master_addr <= "00" & xf;
-                              xf <= xf + 2;
-                              bus_master_control_dati <= '1';
-                           end if;
-                        end if;
-                        if xl = "00000000" then
-                           cmd_state <= cmd_recv;
                            bitcount <= 15;
+                           bus_master_addr <= "00" & xubl_xf;
+                           bus_master_control_dati <= '1';
+                           cmd_state <= cmd_xmit;
+
+                        when cmd_xmit =>
+                           bitcount <= bitcount - 1;
+                           if bitcount = 15 then
+                              bus_master_control_dati <= '0';
+                              work <= bus_master_dati(14 downto 0) & bus_master_dati(15);
+                              xubl_mosi <= bus_master_dati(7);
+                              cs <= '0';
+                           else
+                              xubl_mosi <= work(7);
+                              work <= work(14 downto 0) & work(15);
+                              if bitcount = 0 then
+                                 bitcount <= 15;
+                                 bus_master_addr <= "00" & xf;
+                                 xf <= xf + 2;
+                                 bus_master_control_dati <= '1';
+                              end if;
+                           end if;
+                           if xl = "00000000" then
+                              cmd_state <= cmd_recv;
+                              bitcount <= 15;
+                              if rl = "00000000" then
+                                 cmd_state <= cmd_done;
+                              end if;
+                           else
+                              xl <= xl - 1;
+                           end if;
+
+                        when cmd_recv =>
+                           work <= work(14 downto 8) & xubl_miso & work(6 downto 0) & work(15);
                            if rl = "00000000" then
                               cmd_state <= cmd_done;
+                           else
+                              rl <= rl - 1;
                            end if;
-                        else
-                           xl <= xl - 1;
-                        end if;
-
-                     when cmd_recv =>
-                        work <= work(14 downto 8) & xu_miso & work(6 downto 0) & work(15);
-                        if rl = "00000000" then
-                           cmd_state <= cmd_done;
-                        else
-                           rl <= rl - 1;
-                        end if;
-                        bitcount <= bitcount - 1;
-                        if bitcount = 0 then
-                           bitcount <= 15;
-                           bus_master_addr <= "00" & rt;
-                           bus_master_dato <= work(14 downto 8) & xu_miso & work(6 downto 0) & work(15);
-                           bus_master_control_dato <= '1';
-                           rt <= rt + 2;
-                        else
                            bitcount <= bitcount - 1;
-                           bus_master_control_dato <= '0';
-                        end if;
+                           if bitcount = 0 then
+                              bitcount <= 15;
+                              bus_master_addr <= "00" & rt;
+                              bus_master_dato <= work(14 downto 8) & xubl_miso & work(6 downto 0) & work(15);
+                              bus_master_control_dato <= '1';
+                              rt <= rt + 2;
+                           else
+                              bitcount <= bitcount - 1;
+                              bus_master_control_dato <= '0';
+                           end if;
 
-                     when cmd_done =>
-                        cs <= '1';
+                        when cmd_done =>
+                           cs <= '1';
 
-                     when cmd_wait =>
-                        cmd_state <= cmd_start;
+                        when cmd_wait =>
+                           cmd_state <= cmd_start;
 
-                     when others =>
-                        null;
-                  end case;
+                        when others =>
+                           null;
+                     end case;
 
+                  end if;
+
+               else
+                  cmd_state <= cmd_wait;
+                  cs <= '1';
                end if;
 
-            else
-               cmd_state <= cmd_wait;
-               cs <= '1';
             end if;
 
          end if;

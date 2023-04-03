@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -18,6 +18,8 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+use work.pdp2011.all;
 
 entity xu is
    port(
@@ -47,15 +49,18 @@ entity xu is
       bus_master_control_dato : out std_logic;
       bus_master_nxm : in std_logic := '0';
 
--- ethernet, enc424j600 controller interface
+-- esp32 or enc424j600 frontend interface
       xu_cs : out std_logic;
       xu_mosi : out std_logic;
       xu_sclk : out std_logic;
       xu_miso : in std_logic;
+      xu_srdy : in std_logic;
 
 -- flags
       have_xu : in integer range 0 to 1 := 0;
       have_xu_debug : in integer range 0 to 1 := 1;
+      have_xu_enc : in integer range 0 to 1 := 0;
+      have_xu_esp : in integer range 0 to 1 := 0;
 
 -- debug & blinkenlights
       tx : out std_logic;
@@ -71,173 +76,6 @@ entity xu is
 end xu;
 
 architecture implementation of xu is
-
-component cpu is
-   port(
-      addr_v : out std_logic_vector(15 downto 0);
-      datain : in std_logic_vector(15 downto 0);
-      dataout : out std_logic_vector(15 downto 0);
-      wr : out std_logic;
-      rd : out std_logic;
-      dw8 : out std_logic;
-      cp : out std_logic;
-      ifetch : out std_logic;
-      iwait : out std_logic;
-      id : out std_logic;
-      init : out std_logic;
-
-      br7 : in std_logic;
-      bg7 : out std_logic;
-      int_vector7 : in std_logic_vector(8 downto 0);
-      br6 : in std_logic;
-      bg6 : out std_logic;
-      int_vector6 : in std_logic_vector(8 downto 0);
-      br5 : in std_logic;
-      bg5 : out std_logic;
-      int_vector5 : in std_logic_vector(8 downto 0);
-      bg4 : out std_logic;
-      br4 : in std_logic;
-      int_vector4 : in std_logic_vector(8 downto 0);
-
-      mmutrap : in std_logic;
-      ack_mmutrap : out std_logic;
-      mmuabort : in std_logic;
-      ack_mmuabort : out std_logic;
-
-      npr : in std_logic;
-      npg : out std_logic;
-
-      nxmabort : in std_logic;
-      oddabort : in std_logic;
-      illhalt : out std_logic;
-      ysv : out std_logic;
-      rsv : out std_logic;
-
-      cpu_stack_limit : in std_logic_vector(15 downto 0);
-      cpu_kmillhalt : in std_logic;
-
-      sr0_ic : out std_logic;
-      sr1 : out std_logic_vector(15 downto 0);
-      sr2 : out std_logic_vector(15 downto 0);
-      dstfreference : out std_logic;
-      sr3csmenable : in std_logic;
-
-      psw_in : in std_logic_vector(15 downto 0);
-      psw_in_we_even : in std_logic;
-      psw_in_we_odd : in std_logic;
-      psw_out : out std_logic_vector(15 downto 0);
-
-      pir_in : in std_logic_vector(15 downto 0);
-
-      modelcode : in integer range 0 to 255;
-      init_r7 : in std_logic_vector(15 downto 0) := x"f600";         -- start address after reset = o'173000' = m9312 hi rom
-      init_psw : in std_logic_vector(15 downto 0) := x"00e0";        -- initial psw for kernel mode, primary register set, priority 7
-
-      clk : in std_logic;
-      reset : in std_logic
-   );
-end component;
-
-component mmu is
-   port(
-      cpu_addr_v : in std_logic_vector(15 downto 0);
-      cpu_datain : out std_logic_vector(15 downto 0);
-      cpu_dataout : in std_logic_vector(15 downto 0);
-      cpu_rd : in std_logic;
-      cpu_wr : in std_logic;
-      cpu_dw8 : in std_logic;
-      cpu_cp : in std_logic;
-
-      mmutrap : out std_logic;
-      ack_mmutrap : in std_logic;
-      mmuabort : out std_logic;
-      ack_mmuabort : in std_logic;
-
-      mmuoddabort : out std_logic;
-
-      sr0_ic : in std_logic;
-      sr1_in : in std_logic_vector(15 downto 0);
-      sr2_in : in std_logic_vector(15 downto 0);
-      dstfreference : in std_logic;
-      sr3csmenable : out std_logic;
-      ifetch : in std_logic;
-
-      bus_unibus_mapped : out std_logic;
-
-      bus_addr : out std_logic_vector(21 downto 0);
-      bus_dati : in std_logic_vector(15 downto 0);
-      bus_dato : out std_logic_vector(15 downto 0);
-      bus_control_dati : out std_logic;
-      bus_control_dato : out std_logic;
-      bus_control_datob : out std_logic;
-
-      unibus_addr : out std_logic_vector(17 downto 0);
-      unibus_dati : in std_logic_vector(15 downto 0);
-      unibus_dato : out std_logic_vector(15 downto 0);
-      unibus_control_dati : out std_logic;
-      unibus_control_dato : out std_logic;
-      unibus_control_datob : out std_logic;
-
-      unibus_busmaster_addr : in std_logic_vector(17 downto 0);
-      unibus_busmaster_dati : out std_logic_vector(15 downto 0);
-      unibus_busmaster_dato : in std_logic_vector(15 downto 0);
-      unibus_busmaster_control_dati : in std_logic;
-      unibus_busmaster_control_dato : in std_logic;
-      unibus_busmaster_control_datob : in std_logic;
-      unibus_busmaster_control_npg : in std_logic;
-
-      modelcode : in integer range 0 to 255;
-      sr0out_debug : out std_logic_vector(15 downto 0);
-
-      psw : in std_logic_vector(15 downto 0);
-      id : in std_logic;
-      reset : in std_logic;
-      clk : in std_logic
-   );
-end component;
-
-component cr is
-   port(
-      bus_addr_match : out std_logic;
-      bus_addr : in std_logic_vector(17 downto 0);
-      bus_dati : out std_logic_vector(15 downto 0);
-      bus_dato : in std_logic_vector(15 downto 0);
-      bus_control_dati : in std_logic;
-      bus_control_dato : in std_logic;
-      bus_control_datob : in std_logic;
-
--- psw
-      psw_in : out std_logic_vector(15 downto 0);
-      psw_in_we_even : out std_logic;
-      psw_in_we_odd : out std_logic;
-      psw_out : in std_logic_vector(15 downto 0);
-
--- stack limit
-      cpu_stack_limit : out std_logic_vector(15 downto 0);
-
--- pirq
-      pir_in : out std_logic_vector(15 downto 0);
-
--- cer
-      cpu_illegal_halt : in std_logic;
-      cpu_address_error : in std_logic;
-      cpu_nxm : in std_logic;
-      cpu_iobus_timeout : in std_logic;
-      cpu_ysv : in std_logic;
-      cpu_rsv : in std_logic;
-
--- maintenance register (j11)
-      cpu_kmillhalt : out std_logic;
-
--- model code
-
-      modelcode : in integer range 0 to 255;
-
---
-      reset : in std_logic;
-      clk : in std_logic
-   );
-end component;
 
 component kw11l is
    port(
@@ -314,6 +152,27 @@ component xubr is
       bus_control_dato : in std_logic;
       bus_control_datob : in std_logic;
 
+      have_xu_enc : in integer range 0 to 1 := 0;
+
+      reset : in std_logic;
+      clk : in std_logic
+   );
+end component;
+
+component xubw is
+   port(
+      base_addr : in std_logic_vector(17 downto 0);
+
+      bus_addr_match : out std_logic;
+      bus_addr : in std_logic_vector(17 downto 0);
+      bus_dati : out std_logic_vector(15 downto 0);
+      bus_dato : in std_logic_vector(15 downto 0);
+      bus_control_dati : in std_logic;
+      bus_control_dato : in std_logic;
+      bus_control_datob : in std_logic;
+
+      have_xu_esp : in integer range 0 to 1 := 0;
+
       reset : in std_logic;
       clk : in std_logic
    );
@@ -341,13 +200,51 @@ component xubl is
       bus_master_control_dato : out std_logic;
       bus_master_nxm : in std_logic;
 
-      xu_cs : out std_logic;
-      xu_mosi : out std_logic;
-      xu_sclk : out std_logic;
-      xu_miso : in std_logic;
+      xubl_cs : out std_logic;
+      xubl_mosi : out std_logic;
+      xubl_sclk : out std_logic;
+      xubl_miso : in std_logic;
+
+      have_xu_enc : in integer range 0 to 1 := 0;
 
       reset : in std_logic;
       xublclk : in std_logic;
+      clk : in std_logic
+   );
+end component;
+
+component xubf is
+   port(
+      base_addr : in std_logic_vector(17 downto 0);
+
+      npr : out std_logic;
+      npg : in std_logic;
+
+      bus_addr_match : out std_logic;
+      bus_addr : in std_logic_vector(17 downto 0);
+      bus_dati : out std_logic_vector(15 downto 0);
+      bus_dato : in std_logic_vector(15 downto 0);
+      bus_control_dati : in std_logic;
+      bus_control_dato : in std_logic;
+      bus_control_datob : in std_logic;
+
+      bus_master_addr : out std_logic_vector(17 downto 0);
+      bus_master_dati : in std_logic_vector(15 downto 0);
+      bus_master_dato : out std_logic_vector(15 downto 0);
+      bus_master_control_dati : out std_logic;
+      bus_master_control_dato : out std_logic;
+      bus_master_nxm : in std_logic;
+
+      xubf_cs : out std_logic;
+      xubf_mosi : out std_logic;
+      xubf_sclk : out std_logic;
+      xubf_miso : in std_logic;
+      xubf_srdy : in std_logic;
+
+      have_xu_esp : in integer range 0 to 1 := 0;
+
+      reset : in std_logic;
+      xubfclk : in std_logic;
       clk : in std_logic
    );
 end component;
@@ -409,7 +306,6 @@ signal cpu_pir_in : std_logic_vector(15 downto 0);
 signal cpu_dw8 : std_logic;
 signal cpu_cp : std_logic;
 signal cpu_id : std_logic;
-signal cpu_init : std_logic;
 signal cpu_addr_match : std_logic;
 signal cpu_sr0_ic : std_logic;
 signal cpu_sr1 : std_logic_vector(15 downto 0);
@@ -445,7 +341,7 @@ signal localbus_dato : std_logic_vector(15 downto 0);
 signal localbus_control_dati : std_logic;
 signal localbus_control_dato : std_logic;
 signal localbus_control_datob : std_logic;
-signal localbusmaster_nxmabort : std_logic;
+signal localbusmaster_nxmabort : std_logic := '0';
 signal localunibus_addr_match : std_logic;
 signal localunibus_addr : std_logic_vector(17 downto 0);
 signal localunibus_dati : std_logic_vector(15 downto 0);
@@ -476,8 +372,10 @@ signal kw0_bg : std_logic;
 signal kw0_br : std_logic;
 signal kw0_ivec : std_logic_vector(8 downto 0);
 
-signal ram_addr_match : std_logic;
-signal ram_dati : std_logic_vector(15 downto 0);
+signal xubr_addr_match : std_logic;
+signal xubr_dati : std_logic_vector(15 downto 0);
+signal xubw_addr_match : std_logic;
+signal xubw_dati : std_logic_vector(15 downto 0);
 
 signal cer_nxmabort : std_logic;
 signal cer_ioabort : std_logic;
@@ -488,6 +386,10 @@ signal cpu_kmillhalt : std_logic;
 signal cr_addr_match : std_logic;
 signal cr_dati : std_logic_vector(15 downto 0);
 
+signal xubl_cs : std_logic;
+signal xubl_sclk : std_logic;
+signal xubl_miso : std_logic;
+signal xubl_mosi : std_logic;
 signal xubl_addr_match : std_logic;
 signal xubl_dati : std_logic_vector(15 downto 0);
 signal xubl_npr : std_logic;
@@ -496,6 +398,20 @@ signal localunibus_busmaster_xubl_addr : std_logic_vector(17 downto 0);
 signal localunibus_busmaster_xubl_dato : std_logic_vector(15 downto 0);
 signal localunibus_busmaster_xubl_control_dati : std_logic;
 signal localunibus_busmaster_xubl_control_dato : std_logic;
+
+signal xubf_cs : std_logic;
+signal xubf_sclk : std_logic;
+signal xubf_miso : std_logic;
+signal xubf_mosi : std_logic;
+signal xubf_srdy : std_logic;
+signal xubf_addr_match : std_logic;
+signal xubf_dati : std_logic_vector(15 downto 0);
+signal xubf_npr : std_logic;
+
+signal localunibus_busmaster_xubf_addr : std_logic_vector(17 downto 0);
+signal localunibus_busmaster_xubf_dato : std_logic_vector(15 downto 0);
+signal localunibus_busmaster_xubf_control_dati : std_logic;
+signal localunibus_busmaster_xubf_control_dato : std_logic;
 
 signal xubm_addr_match : std_logic;
 signal xubm_dati : std_logic_vector(15 downto 0);
@@ -561,7 +477,6 @@ begin
       ifetch => ifetchcopy,
       iwait => iwait,
       id => cpu_id,
-      init => cpu_init,
       br7 => '0',
       int_vector7 => o"000",
       br6 => cpu_br6,
@@ -654,7 +569,7 @@ begin
       clk => nclk
    );
 
-   cr0: cr port map(
+   cr0: cr11 port map(
       bus_addr_match => cr_addr_match,
       bus_addr => localunibus_addr,
       bus_dati => cr_dati,
@@ -740,13 +655,32 @@ begin
    xubr0: xubr port map(
       base_addr => o"000000",
 
-      bus_addr_match => ram_addr_match,
+      bus_addr_match => xubr_addr_match,
       bus_addr => localbus_addr(17 downto 0),
-      bus_dati => ram_dati,
+      bus_dati => xubr_dati,
       bus_dato => localbus_dato,
       bus_control_dati => localbus_control_dati,
       bus_control_dato => localbus_control_dato,
       bus_control_datob => localbus_control_datob,
+
+      have_xu_enc => have_xu_enc,
+
+      reset => xureset,
+      clk => nclk
+   );
+
+   xubw0: xubw port map(
+      base_addr => o"000000",
+
+      bus_addr_match => xubw_addr_match,
+      bus_addr => localbus_addr(17 downto 0),
+      bus_dati => xubw_dati,
+      bus_dato => localbus_dato,
+      bus_control_dati => localbus_control_dati,
+      bus_control_dato => localbus_control_dato,
+      bus_control_datob => localbus_control_datob,
+
+      have_xu_esp => have_xu_esp,
 
       reset => xureset,
       clk => nclk
@@ -773,15 +707,64 @@ begin
       bus_master_control_dato => localunibus_busmaster_xubl_control_dato,
       bus_master_nxm => localbusmaster_nxmabort,
 
-      xu_cs => xu_cs,
-      xu_mosi => xu_mosi,
-      xu_sclk => xu_sclk,
-      xu_miso => xu_miso,
+      xubl_cs => xubl_cs,
+      xubl_mosi => xubl_mosi,
+      xubl_sclk => xubl_sclk,
+      xubl_miso => xubl_miso,
+
+      have_xu_enc => have_xu_enc,
 
       reset => xureset,
       xublclk => cpuclk,
       clk => nclk
    );
+   xubl_miso <= xu_miso;
+
+
+   xubf0: xubf port map(
+      base_addr => o"777000",
+
+      npr => xubf_npr,
+      npg => cpu_npg,
+
+      bus_addr_match => xubf_addr_match,
+      bus_addr => localunibus_addr,
+      bus_dati => xubf_dati,
+      bus_dato => localunibus_dato,
+      bus_control_dati => localunibus_control_dati,
+      bus_control_dato => localunibus_control_dato,
+      bus_control_datob => localunibus_control_datob,
+
+      bus_master_addr => localunibus_busmaster_xubf_addr,
+      bus_master_dati => localunibus_busmaster_dati,
+      bus_master_dato => localunibus_busmaster_xubf_dato,
+      bus_master_control_dati => localunibus_busmaster_xubf_control_dati,
+      bus_master_control_dato => localunibus_busmaster_xubf_control_dato,
+      bus_master_nxm => localbusmaster_nxmabort,
+
+      xubf_cs => xubf_cs,
+      xubf_mosi => xubf_mosi,
+      xubf_sclk => xubf_sclk,
+      xubf_miso => xubf_miso,
+      xubf_srdy => xubf_srdy,
+
+      have_xu_esp => have_xu_esp,
+
+      reset => xureset,
+      xubfclk => cpuclk,
+      clk => nclk
+   );
+   xubf_miso <= xu_miso;
+   xubf_srdy <= xu_srdy;
+   xu_cs <= xubl_cs when have_xu_enc = 1
+      else xubf_cs when have_xu_esp = 1
+      else '0';
+   xu_sclk <= xubl_sclk when have_xu_enc = 1
+      else xubf_sclk when have_xu_esp = 1
+      else '0';
+   xu_mosi <= xubl_mosi when have_xu_enc = 1
+      else xubf_mosi when have_xu_esp = 1
+      else '0';
 
    xubm0: xubm port map(
       base_addr => o"777100",
@@ -826,7 +809,8 @@ begin
    cpu_int_vector6 <= kw0_ivec;
 
    localbus_dati <=
-      ram_dati when ram_addr_match = '1'
+      xubr_dati when xubr_addr_match = '1'
+      else xubw_dati when xubw_addr_match = '1'
       else "0000000000000000";
 
    localunibus_dati <=
@@ -834,6 +818,7 @@ begin
       else kl0_dati when kl0_addr_match = '1'
       else kw0_dati when kw0_addr_match = '1'
       else xubl_dati when xubl_addr_match = '1'
+      else xubf_dati when xubf_addr_match = '1'
       else xubm_dati when xubm_addr_match = '1'
       else xu_dati when local_addr_match = '1'
       else "0000000000000000";
@@ -843,12 +828,13 @@ begin
       or kl0_addr_match = '1'
       or kw0_addr_match = '1'
       or xubl_addr_match = '1'
+      or xubf_addr_match = '1'
       or xubm_addr_match = '1'
       or local_addr_match = '1'
       else '0';
 
    cer_nxmabort <= '1'
-      when ram_addr_match = '0'
+      when xubr_addr_match = '0' and xubw_addr_match = '0'
       and (localbus_control_dati = '1' or localbus_control_dato = '1')
       and localbus_unibus_mapped = '0'
       and cpu_npg = '0'
@@ -856,37 +842,42 @@ begin
 
    cer_ioabort <=
       '1' when localunibus_addr_match = '0' and (localunibus_control_dati = '1' or localunibus_control_dato = '1') and localunibus_addr(17 downto 13) = "11111" and cpu_npg = '0'
-      else '1' when ram_addr_match = '0' and localbus_unibus_mapped = '1' and (localbus_control_dati = '1' or localbus_control_dato = '1') and cpu_npg = '0'
+      else '1' when xubr_addr_match = '0' and xubw_addr_match = '0' and localbus_unibus_mapped = '1' and (localbus_control_dati = '1' or localbus_control_dato = '1') and cpu_npg = '0'
       else '0';
 
    nxmabort <= '1' when cer_nxmabort = '1' or cer_ioabort = '1' else '0';
 
    oddabort <=
       '1' when localbus_control_dato = '1' and localbus_control_datob = '0' and localbus_addr(0) = '1'
---      else '1' when ifetchcopy = '1' and localunibus_control_dati = '1' and localunibus_addr(17 downto 13) = "11111" and ram_addr_match /= '1'  -- FIXME???
       else '1' when mmu_oddabort = '1'
       else '0';
 
    localunibus_busmaster_addr <= localunibus_busmaster_xubl_addr when cpu_npg = '1' and xubl_npr = '1'
+      else localunibus_busmaster_xubf_addr when cpu_npg = '1' and xubf_npr = '1'
       else localunibus_busmaster_xubm_addr when cpu_npg = '1' and xubm_npr = '1'
       else "000000000000000000";
    localunibus_busmaster_dato <= localunibus_busmaster_xubl_dato when cpu_npg = '1' and xubl_npr = '1'
+      else localunibus_busmaster_xubf_dato when cpu_npg = '1' and xubf_npr = '1'
       else localunibus_busmaster_xubm_dato when cpu_npg = '1' and xubm_npr = '1'
       else "0000000000000000";
    localunibus_busmaster_control_dati <= localunibus_busmaster_xubl_control_dati when cpu_npg = '1' and xubl_npr = '1'
+      else localunibus_busmaster_xubf_control_dati when cpu_npg = '1' and xubf_npr = '1'
       else localunibus_busmaster_xubm_control_dati when cpu_npg = '1' and xubm_npr = '1'
       else '0';
    localunibus_busmaster_control_dato <= localunibus_busmaster_xubl_control_dato when cpu_npg = '1' and xubl_npr = '1'
+      else localunibus_busmaster_xubf_control_dato when cpu_npg = '1' and xubf_npr = '1'
       else localunibus_busmaster_xubm_control_dato when cpu_npg = '1' and xubm_npr = '1'
       else '0';
    localunibus_busmaster_control_datob <= '0' when cpu_npg = '1' and xubl_npr = '1'
+      else '0' when cpu_npg = '1' and xubf_npr = '1'
       else '0' when cpu_npg = '1' and xubm_npr = '1'
       else '0';
    localunibus_busmaster_control_npg <= '1' when cpu_npg = '1' and xubl_npr = '1'
+      else '1' when cpu_npg = '1' and xubf_npr = '1'
       else '1' when cpu_npg = '1' and xubm_npr = '1'
       else '0';
 
-   cpu_npr <= '1' when xubl_npr = '1' or xubm_npr = '1' else '0';
+   cpu_npr <= '1' when xubl_npr = '1' or xubf_npr = '1' or xubm_npr = '1' else '0';
 
    bus_master_addr <= xubm_addr;
    bus_master_dato <= xubm_dato;
@@ -903,6 +894,8 @@ begin
    local_addr_match <= '1' when localunibus_addr(17 downto 3) = local_base_addr(17 downto 3) and have_xu = 1 else '0';
    bus_addr_match <= base_addr_match;
 
+   localbusmaster_nxmabort <= '0';
+   
 -- device logic
 
    pcsr0_intr <= '1' when pcsr0_seri = '1' or pcsr0_pcei = '1' or pcsr0_rxi = '1' or pcsr0_txi = '1' or pcsr0_dni = '1' or pcsr0_rcbi = '1' or pcsr0_usci = '1' else '0';

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -544,7 +544,6 @@ constant vga_font : std_logic_vector(0 to 32767) :=                          -- 
    "0000000000000000000000000000000000000000000000000000000000000000"  &     -- 32640-32703 FONTDATA
    "0000000000000000000000000000000000000000000000000000000000000000"        -- 32704-32767 FONTDATA
 ;
-
 
 begin
    process(vgaclk)

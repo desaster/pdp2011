@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -21,6 +21,8 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
+use work.pdp2011.all;
+
 entity top is
    port(
       led : out std_logic_vector(7 downto 0);
@@ -34,8 +36,8 @@ entity top is
       rx : in std_logic;
       tx2 : out std_logic;
       rx2 : in std_logic;
-		cts2 : in std_logic;
-		rts2 : out std_logic;
+      cts2 : in std_logic;
+      rts2 : out std_logic;
 
       sdcard_cs : out std_logic;
       sdcard_mosi : out std_logic;
@@ -79,190 +81,6 @@ entity top is
 end top;
 
 architecture implementation of top is
-
-component unibus is
-   port(
--- bus interface
-      addr : out std_logic_vector(21 downto 0);                      -- physical address driven out to the bus by cpu or busmaster peripherals
-      dati : in std_logic_vector(15 downto 0);                       -- data input to cpu or busmaster peripherals
-      dato : out std_logic_vector(15 downto 0);                      -- data output from cpu or busmaster peripherals
-      control_dati : out std_logic;                                  -- if '1', this is an input cycle
-      control_dato : out std_logic;                                  -- if '1', this is an output cycle
-      control_datob : out std_logic;                                 -- if '1', the current output cycle is for a byte
-      addr_match : in std_logic;                                     -- '1' if the address is recognized
-
--- debug & blinkenlights
-      ifetch : out std_logic;                                        -- '1' if this cycle is an ifetch cycle
-      iwait : out std_logic;                                         -- '1' if the cpu is in wait state
-      cpu_addr_v : out std_logic_vector(15 downto 0);                -- virtual address from cpu, for debug and general interest
-
--- rl controller
-      have_rl : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      rl_sdcard_cs : out std_logic;
-      rl_sdcard_mosi : out std_logic;
-      rl_sdcard_sclk : out std_logic;
-      rl_sdcard_miso : in std_logic := '0';
-      rl_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
-
--- rk controller
-      have_rk : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_rk_num : in integer range 1 to 8 := 8;                    -- active number of drives on the controller; set to < 8 to save core
-      rk_sdcard_cs : out std_logic;
-      rk_sdcard_mosi : out std_logic;
-      rk_sdcard_sclk : out std_logic;
-      rk_sdcard_miso : in std_logic := '0';
-      rk_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
-
--- rh controller
-      have_rh : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      rh_sdcard_cs : out std_logic;
-      rh_sdcard_mosi : out std_logic;
-      rh_sdcard_sclk : out std_logic;
-      rh_sdcard_miso : in std_logic := '0';
-      rh_sdcard_debug : out std_logic_vector(3 downto 0);            -- debug/blinkenlights
-      rh_type : in integer range 4 to 7 := 6;
-
--- xu enc424j600 controller interface
-      have_xu : in integer range 0 to 1 := 0;                        -- enable conditional compilation
-      have_xu_debug : in integer range 0 to 1 := 1;                  -- enable debug core
-      xu_cs : out std_logic;
-      xu_mosi : out std_logic;
-      xu_sclk : out std_logic;
-      xu_miso : in std_logic := '0';
-      xu_debug_tx : out std_logic;                                   -- rs232, 115200/8/n/1 debug output from microcode
-
--- kl11, console ports
-      have_kl11 : in integer range 0 to 4 := 1;                      -- conditional compilation - number of kl11 controllers to include. Should normally be at least 1
-
-      tx0 : out std_logic;
-      rx0 : in std_logic := '1';
-      rts0 : out std_logic;
-      cts0 : in std_logic := '0';
-      kl0_bps : in integer range 1200 to 230400 := 9600;             -- bps rate - don't set over 38400 for interrupt control applications
-      kl0_force7bit : in integer range 0 to 1 := 0;                  -- zero out high order bit on transmission and reception
-      kl0_rtscts : in integer range 0 to 1 := 0;                     -- conditional compilation switch for rts and cts signals; also implies to include core that implements a silo buffer
-
-      tx1 : out std_logic;
-      rx1 : in std_logic := '1';
-      rts1 : out std_logic;
-      cts1 : in std_logic := '0';
-      kl1_bps : in integer range 1200 to 230400 := 9600;
-      kl1_force7bit : in integer range 0 to 1 := 0;
-      kl1_rtscts : in integer range 0 to 1 := 0;
-
-      tx2 : out std_logic;
-      rx2 : in std_logic := '1';
-      rts2 : out std_logic;
-      cts2 : in std_logic := '0';
-      kl2_bps : in integer range 1200 to 230400 := 9600;
-      kl2_force7bit : in integer range 0 to 1 := 0;
-      kl2_rtscts : in integer range 0 to 1 := 0;
-
-      tx3 : out std_logic;
-      rx3 : in std_logic := '1';
-      rts3 : out std_logic;
-      cts3 : in std_logic := '0';
-      kl3_bps : in integer range 1200 to 230400 := 9600;
-      kl3_force7bit : in integer range 0 to 1 := 0;
-      kl3_rtscts : in integer range 0 to 1 := 0;
-
--- dr11c, universal interface
-
-      have_dr11c : in integer range 0 to 1 := 0;                     -- conditional compilation
-      have_dr11c_loopback : in integer range 0 to 1 := 0;            -- for testing only - zdrc
-      have_dr11c_signal_stretch : in integer range 0 to 127 := 7;    -- the signals ndr*, dxm, init will be stretched to this many cpu cycles
-
-      dr11c_in : in std_logic_vector(15 downto 0) := (others => '0');
-      dr11c_out : out std_logic_vector(15 downto 0);
-      dr11c_reqa : in std_logic := '0';
-      dr11c_reqb : in std_logic := '0';
-      dr11c_csr0 : out std_logic;
-      dr11c_csr1 : out std_logic;
-      dr11c_ndr : out std_logic;                                     -- new data ready : dr11c_out has new data
-      dr11c_ndrlo : out std_logic;                                   -- new data ready : dr11c_out(7 downto 0) has new data
-      dr11c_ndrhi : out std_logic;                                   -- new data ready : dr11c_out(15 downto 8) has new data
-      dr11c_dxm : out std_logic;                                     -- data transmitted : dr11c_in data has been read by the cpu
-      dr11c_init : out std_logic;                                    -- unibus reset propagated out to the user device
-
--- cpu console, switches and display register
-      have_csdr : in integer range 0 to 1 := 1;
-
--- clock
-      have_kw11l : in integer range 0 to 1 := 1;                     -- conditional compilation
-      kw11l_hz : in integer range 50 to 800 := 60;                   -- valid values are 50, 60, 800
-
--- model code
-      modelcode : in integer range 0 to 255;                         -- mostly used are 20,34,44,45,70,94; others are less well tested
-      have_fp : in integer range 0 to 2 := 2;                        -- fp11 switch; 0=don't include; 1=include; 2=include if the cpu model can support fp11
-      have_fpa : in integer range 0 to 1 := 1;                       -- floating point accelerator present with J11 cpu
-
--- cpu initial r7 and psw
-      init_r7 : in std_logic_vector(15 downto 0) := x"ea10";         -- start address after reset f600 = o'173000' = m9312 hi rom; ea10 = 165020 = m9312 lo rom
-      init_psw : in std_logic_vector(15 downto 0) := x"00e0";        -- initial psw for kernel mode, primary register set, priority 7
-
--- console
-      cons_load : in std_logic := '0';
-      cons_exa : in std_logic := '0';
-      cons_dep : in std_logic := '0';
-      cons_cont : in std_logic := '0';                               -- continue, pulse '1'
-      cons_ena : in std_logic := '1';                                -- ena/halt, '1' is enable
-      cons_start : in std_logic := '0';
-      cons_sw : in std_logic_vector(21 downto 0) := (others => '0');
-      cons_adss_mode : in std_logic_vector(1 downto 0) := (others => '0');
-      cons_adss_id : in std_logic := '0';
-      cons_adss_cons : in std_logic := '0';
-      cons_consphy : out std_logic_vector(21 downto 0);
-      cons_progphy : out std_logic_vector(21 downto 0);
-      cons_br : out std_logic_vector(15 downto 0);
-      cons_shfr : out std_logic_vector(15 downto 0);
-      cons_maddr : out std_logic_vector(15 downto 0);                -- microcode address fpu/cpu
-      cons_dr : out std_logic_vector(15 downto 0);
-      cons_parh : out std_logic;
-      cons_parl : out std_logic;
-
-      cons_adrserr : out std_logic;
-      cons_run : out std_logic;                                      -- '1' if executing instructions (incl wait)
-      cons_pause : out std_logic;                                    -- '1' if bus has been relinquished to npr
-      cons_master : out std_logic;                                   -- '1' if cpu is bus master and not running
-      cons_kernel : out std_logic;                                   -- '1' if kernel mode
-      cons_super : out std_logic;                                    -- '1' if super mode
-      cons_user : out std_logic;                                     -- '1' if user mode
-      cons_id : out std_logic;                                       -- '0' if instruction, '1' if data AND data mapping is enabled in the mmu
-      cons_map16 : out std_logic;                                    -- '1' if 16-bit mapping
-      cons_map18 : out std_logic;                                    -- '1' if 18-bit mapping
-      cons_map22 : out std_logic;                                    -- '1' if 22-bit mapping
-
--- clocks and reset
-      clk : in std_logic;                                            -- cpu clock
-      clk50mhz : in std_logic;                                       -- 50Mhz clock for peripherals
-      reset : in std_logic                                           -- active '1' synchronous reset
-   );
-end component;
-
-component vt is
-   port(
-      vga_hsync : out std_logic;
-      vga_vsync : out std_logic;
-      vga_out : out std_logic;
-
--- serial port
-      tx : out std_logic;
-      rx : in std_logic;
-
--- ps2 keyboard
-      ps2k_c : in std_logic;
-      ps2k_d : in std_logic;
-
--- debug & blinkenlights
-      ifetch : out std_logic;
-      iwait : out std_logic;
-
--- clock & reset
-      cpuclk : in std_logic;
-      clk50mhz : in std_logic;
-      reset : in std_logic
-   );
-end component;
 
 component qsseg is
    port(
@@ -385,9 +203,6 @@ begin
       xu_sclk => xu_sclk,
       xu_miso => xu_miso,
 
-      console_switches => console_switches,
-      console_displays => console_displays,
-
       modelcode => 45,
 --       have_fp => 0,
 
@@ -397,7 +212,7 @@ begin
    );
 
 --    tx <= '0';
---    vt0: vt port map(
+--    vt0: vt10x port map(
 --       vga_hsync => vga_hsync,
 --       vga_vsync => vga_vsync,
 --       vga_out => vga_out,

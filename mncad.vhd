@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -39,11 +39,14 @@ entity mncad is
       st1 : in std_logic;
       clkov : in std_logic;
 
-      ad_start : out std_logic;
-      ad_done : in std_logic := '0';
-      ad_channel : out std_logic_vector(5 downto 0);
-      ad_nxc : in std_logic := '0';
-      ad_sample : in std_logic_vector(11 downto 0) := "000000000000";
+      ad_start : out std_logic;                                      -- '1' pulse signals to start converting
+      ad_done : in std_logic := '0';                                 -- '1' signals to the mncad that the a/d has completed a conversion
+      ad_channel : out std_logic_vector(5 downto 0);                 -- the current a/d channel
+      ad_nxc : in std_logic := '0';                                  -- '1' when the current channel does not exist
+      ad_sample : in std_logic_vector(11 downto 0) := "000000000000";          -- the last conversion result
+      ad_type : in std_logic_vector(3 downto 0) := "0000";           -- gain bits and/or channel type code for the current channel
+      ad_chgbits : out std_logic_vector(3 downto 0);                 -- new gain bits for the current channel
+      ad_wcgbits : out std_logic;                                    -- when '1' program the chgbits into the current channel
 
       have_mncad : in integer range 0 to 1 := 0;
 
@@ -95,6 +98,8 @@ signal ad_running : std_logic;
 signal st1trigger : std_logic;
 signal clkovtrigger : std_logic;
 
+signal gain_state : integer range 0 to 3 := 0;
+signal gain_state_bits : std_logic_vector(3 downto 0);
 
 begin
 
@@ -192,7 +197,11 @@ begin
 
                ad_start <= '0';
                ad_running <= '0';
+
+               gain_state <= 0;
             else
+
+               ad_wcgbits <= '0';
 
                if base_addr_match = '1' and bus_control_dati = '1' then
                   case bus_addr(1) is
@@ -244,6 +253,18 @@ begin
                            adcsr_err <= bus_dato(15);
                            adcsr_errie <= bus_dato(14);
                            adcsr_muxch <= bus_dato(13 downto 8);
+
+                           if bus_dato(13 downto 8) = "111111" and gain_state = 0 then
+                              gain_state <= 1;
+                           elsif gain_state = 1 then
+                              gain_state_bits <= bus_dato(11 downto 8);
+                              gain_state <= 2;
+                           elsif gain_state = 2 then
+                              ad_chgbits <= gain_state_bits;
+                              ad_wcgbits <= '1';
+                              gain_state <= 0;
+                           end if;
+
                         when '1' =>
                            null;
                         when others =>
@@ -264,7 +285,12 @@ begin
                   if ad_done_trigger = '0' then
                      ad_running <= '0';
                      ad_start <= '0';
-                     adbuf <= "0000" & ad_sample;
+                     adbuf(11 downto 0) <= ad_sample;
+                     if adcsr_enable_id = '0' then
+                        adbuf(15 downto 12) <= "0000";
+                     else
+                        adbuf(15 downto 12) <= ad_type;
+                     end if;
                      adbuf_read <= '0';
                      if adbuf_read = '0' then
                         adcsr_err <= '1';

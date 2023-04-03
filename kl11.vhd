@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -45,7 +45,7 @@ entity kl11 is
       have_kl11 : in integer range 0 to 1;
       have_kl11_force7bit : in integer range 0 to 1;
       have_kl11_rtscts : in integer range 0 to 1;
-      have_kl11_bps : in integer range 1200 to 230400;
+      have_kl11_bps : in integer range 300 to 230400;
 
       reset : in std_logic;
 
@@ -60,6 +60,13 @@ architecture implementation of kl11 is
 -- configuration
 
 signal have_kl11_silo : integer range 0 to 1;
+signal have_kl11_rx_act : integer range 0 to 1;
+signal have_kl11_rx_err : integer range 0 to 1;
+signal have_kl11_rx_ovr : integer range 0 to 1;
+signal have_kl11_rx_frr : integer range 0 to 1;
+signal have_kl11_rx_par : integer range 0 to 1;
+signal have_kl11_tx_brk : integer range 0 to 1;
+
 
 -- rcsr
 signal rx_act : std_logic;                                 -- rcsr bit 11
@@ -67,11 +74,17 @@ signal rx_done : std_logic;                                -- rcsr bit 7
 signal rx_ie : std_logic;                                  -- rcsr bit 6
 
 -- rbuf
-signal rx_buf : std_logic_vector(7 downto 0);
+signal rx_err : std_logic;                                 -- rbuf bit 15
+signal rx_ovr : std_logic;                                 -- rbuf bit 14
+signal rx_frr : std_logic;                                 -- rbuf bit 13
+signal rx_par : std_logic;                                 -- rbuf bit 12
+
+signal rx_buf : std_logic_vector(7 downto 0);              -- rbuf bit 7:0
 
 -- xcsr
 signal tx_rdy : std_logic;                                 -- xcsr bit 7
 signal tx_ie : std_logic;                                  -- xcsr bit 6
+signal tx_brk : std_logic;                                 -- xcsr bit 0
 
 -- xbuf
 signal tx_buf : std_logic_vector(7 downto 0);
@@ -92,7 +105,7 @@ signal interrupt_state : interrupt_state_type := i_idle;
 
 
 -- clock divisors, speed
-constant max_clkdiv : integer := 2976;
+constant max_clkdiv : integer := 11904;
 signal clkdiv : integer range 0 to max_clkdiv;
 signal cdc : integer range 0 to max_clkdiv := 0;
 signal cdctrigger : integer range 0 to 1 := 1;
@@ -139,6 +152,11 @@ constant recv_copy_filter_size : integer := 2;
 subtype recv_copy_filter_t is std_logic_vector(recv_copy_filter_size-1 downto 0);
 signal recv_copy_filter : recv_copy_filter_t;
 
+signal recv_frr : std_logic := '0';
+constant recv_frr_filter_size : integer := 2;
+subtype recv_frr_filter_t is std_logic_vector(recv_frr_filter_size-1 downto 0);
+signal recv_frr_filter : recv_frr_filter_t;
+
 signal rtsstretch : integer range 0 to 800 := 0;
 
 
@@ -159,24 +177,28 @@ signal xmit_buf : std_logic_vector(7 downto 0);
 signal xmit_buf_loaded : integer range 0 to 1 := 0;
 signal xmit_bit : integer range 0 to 7 := 0;
 
+signal xmit_tx : std_logic;
+
 
 begin
 
 -- clkdiv: this many cycles to count off for each sample
    with have_kl11_bps select clkdiv <=
-      2976 when 1200,
-      1488 when 2400,
-      744  when 4800,
-      372  when 9600,
-      186  when 19200,
-      93   when 38400,
-      62   when 57600,
-      31   when 115200,
-      18   when 230400,
-      372  when others;                -- fallback to 9600 when we don't know the translation
+      11904 when 300,
+      2976  when 1200,
+      1488  when 2400,
+      744   when 4800,
+      372   when 9600,
+      186   when 19200,
+      93    when 38400,
+      62    when 57600,
+      31    when 115200,
+      18    when 230400,
+      372   when others;               -- fallback to 9600 when we don't know the translation
 
 -- samplerate: this many samples for each bit
    with have_kl11_bps select samplerate <=
+      14 when 300,
       14 when 1200,
       14 when 2400,
       14 when 4800,
@@ -188,8 +210,9 @@ begin
       12 when 230400,
       14 when others;                  -- fallback to 9600 when we don't know the translation
 
--- samplerate: this many samples for each bit
+-- minsample: this many samples out of the samplerate should be one for a bit to be considered a one
    with have_kl11_bps select minsample <=
+      8  when 300,
       8  when 1200,
       8  when 2400,
       8  when 4800,
@@ -201,11 +224,22 @@ begin
       6  when 230400,
       10 when others;                  -- fallback to 9600 when we don't know the translation
 
+   have_kl11_silo <= 1 when have_kl11_rtscts = 1 else 0;
+
+   have_kl11_rx_act <= 0;
+   have_kl11_rx_err <= 1;
+   have_kl11_rx_ovr <= 1;
+   have_kl11_rx_frr <= 1;
+   have_kl11_rx_par <= 1;
+   have_kl11_tx_brk <= 1;
 
    base_addr_match <= '1' when base_addr(17 downto 3) = bus_addr(17 downto 3) and have_kl11 = 1 else '0';
    bus_addr_match <= base_addr_match;
 
-   have_kl11_silo <= 1 when have_kl11_rtscts = 1 else 0;
+   rx_err <= '1' when rx_ovr = '1' or rx_frr = '1' or rx_par = '1' else '0';
+
+   tx <= '0' when have_kl11_tx_brk = 1 and tx_brk = '1'
+      else xmit_tx;
 
    process(clk, base_addr_match, reset, have_kl11, recv_copy)
    begin
@@ -284,18 +318,45 @@ begin
                tx_buf <= "00000000";
                rx_buf <= "00000000";
                tx_ie <= '0';
-               rx_act <= '0';
                tx_rdy <= '1';
+
+               if have_kl11_rx_ovr = 1 then
+                  rx_ovr <= '0';
+               end if;
+               if have_kl11_rx_frr = 1 then
+                  rx_frr <= '0';
+                  recv_frr_filter <= (others => '0');
+               end if;
+               if have_kl11_rx_par = 1 then
+                  rx_par <= '0';
+               end if;
+               if have_kl11_rx_act = 1 then
+                  rx_act <= '0';
+               end if;
+
+               if have_kl11_tx_brk = 1 then
+                  tx_brk <= '0';
+               end if;
 
                tx_start <= 0;
             else
 
+               if have_kl11_rx_frr = 1 then
+                  recv_frr_filter <= recv_frr_filter(recv_frr_filter_t'high-1 downto 0) & recv_frr;
+                  if recv_frr_filter = recv_frr_filter_t'(others => '1') then
+                     rx_frr <= '1';
+                  end if;
+               end if;
+
                recv_copy_filter <= recv_copy_filter(recv_copy_filter_t'high-1 downto 0) & recv_copy;
                if recv_copy_filter = recv_copy_filter_t'(others => '1') and rx_copied = '0' then
-                  if rx_done = '0' then
-                     rx_buf <= recv_buf;
-                     rx_done <= '1';
-                     rx_copied <= '1';
+                  rx_buf <= recv_buf;
+                  rx_done <= '1';
+                  rx_copied <= '1';
+                  if rx_done = '1' then
+                     rx_ovr <= '1';
+                  else
+                     rx_ovr <= '0';
                   end if;
                end if;
                if rx_copied = '1' then
@@ -323,19 +384,43 @@ begin
 
                if base_addr_match = '1' and bus_control_dati = '1' then
                   case bus_addr(2 downto 1) is
-                     when "00" =>
-                        bus_dati <= "0000" & rx_act & "000" & rx_done & rx_ie & "000000";
-                     when "01" =>
+                     when "00" =>                                    -- rcsr
+                        bus_dati <= (others => '0');
+                        if have_kl11_rx_act = 1 then
+                           bus_dati(11) <= rx_act;
+                        end if;
+                        bus_dati(7) <= rx_done;
+                        bus_dati(6) <= rx_ie;
+                     when "01" =>                                    -- rbuf
                         rx_done <= '0';
+                        bus_dati <= (others => '0');
+                        if have_kl11_rx_err = 1 then
+                           bus_dati(15) <= rx_err;
+                        end if;
+                        if have_kl11_rx_ovr = 1 then
+                           bus_dati(14) <= rx_ovr;
+                        end if;
+                        if have_kl11_rx_frr = 1 then
+                           bus_dati(13) <= rx_frr;
+                        end if;
+                        if have_kl11_rx_par = 1 then
+                           bus_dati(12) <= rx_par;
+                        end if;
                         if have_kl11_force7bit = 1 then
-                           bus_dati <= "00000000" & "0" & rx_buf(6 downto 0);
+                           bus_dati(6 downto 0) <= rx_buf(6 downto 0);
                         else
-                           bus_dati <= "00000000" & rx_buf;
+                           bus_dati(7 downto 0) <= rx_buf;
                         end if;
                      when "10" =>
-                        bus_dati <= "00000000" & tx_rdy & tx_ie & "000000";
+                        bus_dati <= (others => '0');
+                        bus_dati(7) <= tx_rdy;
+                        bus_dati(6) <= tx_ie;
+                        if have_kl11_tx_brk = 1 then
+                           bus_dati(0) <= tx_brk;
+                        end if;
                      when "11" =>
-                        bus_dati <= "00000000" & tx_buf;
+                        bus_dati <= (others => '0');
+                        bus_dati(7 downto 0) <= tx_buf;
                      when others =>
                         bus_dati <= "0000000000000000";
                   end case;
@@ -353,6 +438,9 @@ begin
                            rx_done <= '0';
                         when "10" =>
                            tx_ie <= bus_dato(6);
+                           if have_kl11_tx_brk = 1 then
+                              tx_brk <= bus_dato(0);
+                           end if;
                         when "11" =>
                            if have_kl11_force7bit = 1 then
                               tx_buf <= '0' & bus_dato(6 downto 0);
@@ -386,6 +474,10 @@ begin
                rtsstretch <= 0;
                rts <= '0';
                rxf <= '1';
+
+               if have_kl11_rx_frr = 1 then
+                  recv_frr <= '0';
+               end if;
 
                recv_c <= "0000";
                recv_p <= "0000";
@@ -527,7 +619,10 @@ begin
                               recv_copy <= '1';                                -- so set recv_copy to kick it off and issue the byte to the controller to dispose of
                            end if;
                         end if;
-                        if recv_sample > minsample-4 and rxf = '1' then        -- allow to stop early, some transmitters don't honour stop bit timing
+                        if (recv_sample >= samplerate-1) or (recv_sample > samplerate-4 and rxf = '1') then        -- allow to stop early, some transmitters don't honour stop bit timing
+                           if have_kl11_rx_frr = 1 and recv_count > 0 then
+                              recv_frr <= '1';
+                           end if;
                            recv_state <= recv_idle;
                         end if;
 
@@ -554,7 +649,7 @@ begin
                   case xmit_state is
 
                      when xmit_idle =>
-                        tx <= '1';
+                        xmit_tx <= '1';
                         if tx_start = 1 and xmit_buf_loaded = 0 then
                            xmit_state <= xmit_startbit;
                            xmit_buf <= tx_buf;
@@ -562,14 +657,14 @@ begin
                         end if;
 
                      when xmit_startbit =>
-                        tx <= '0';
+                        xmit_tx <= '0';
                         if xmit_sample >= samplerate-1 then
                            xmit_state <= xmit_data;
                            xmit_bit <= 0;
                         end if;
 
                      when xmit_data =>
-                        tx <= xmit_buf(xmit_bit);
+                        xmit_tx <= xmit_buf(xmit_bit);
                         if xmit_sample >= samplerate-1 then
                            xmit_bit <= xmit_bit + 1;
                            if xmit_bit = 7 then
@@ -578,7 +673,7 @@ begin
                         end if;
 
                      when xmit_stopbit =>
-                        tx <= '1';
+                        xmit_tx <= '1';
                         if xmit_sample >= samplerate-1 then
                            xmit_state <= xmit_idle;
                         end if;
@@ -601,7 +696,7 @@ begin
 
             else
 
-               tx <= '1';
+               xmit_tx <= '1';
 
             end if;
 

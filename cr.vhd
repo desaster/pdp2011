@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -19,7 +19,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
-entity cr is
+entity cr11 is
    port(
       bus_addr_match : out std_logic;
       bus_addr : in std_logic_vector(17 downto 0);
@@ -66,9 +66,9 @@ entity cr is
       reset : in std_logic;
       clk : in std_logic
    );
-end cr;
+end cr11;
 
-architecture implementation of cr is
+architecture implementation of cr11 is
 
 signal base_addr_match : std_logic;
 signal nxm : std_logic;

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -19,7 +19,9 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
-entity vt is
+use work.pdp2011.all;
+
+entity vt10x is
    port(
       vga_hsync : out std_logic;                                     -- horizontal sync
       vga_vsync : out std_logic;                                     -- vertical sync
@@ -59,258 +61,9 @@ entity vt is
       clk50mhz : in std_logic;                                       -- clk50mhz : used for vga signal timing
       reset : in std_logic                                           -- reset
    );
-end vt;
+end vt10x;
 
-architecture implementation of vt is
-
-component cpu is
-   port(
-      addr_v : out std_logic_vector(15 downto 0);                    -- the virtual address that the cpu drives out to the bus for the current read or write
-      datain : in std_logic_vector(15 downto 0);                     -- when doing a read, the data input to the cpu
-      dataout : out std_logic_vector(15 downto 0);                   -- when doing a write, the data output from the cpu
-      wr : out std_logic;                                            -- if '1', the cpu is doing a write to the bus and drives addr_v and dataout
-      rd : out std_logic;                                            -- if '1', the cpu is doing a read from the bus, drives addr_v and reads datain
-      dw8 : out std_logic;                                           -- if '1', the read or write initiated by the cpu is 8 bits wide
-      cp : out std_logic;                                            -- if '1', the read or write should use the previous cpu mode
-      ifetch : out std_logic;                                        -- if '1', this read is for an instruction fetch
-      id : out std_logic;                                            -- if '1', the read or write should use data space
-      init : out std_logic;                                          -- if '1', the devices on the bus should reset
-
-      iwait : out std_logic;                                         -- if '1', the cpu is waiting for an interrupt
-
-      br7 : in std_logic;                                            -- interrupt request, 7
-      bg7 : out std_logic;                                           -- interrupt grant, 7
-      int_vector7 : in std_logic_vector(8 downto 0);                 -- interrupt vector, 7
-      br6 : in std_logic;
-      bg6 : out std_logic;
-      int_vector6 : in std_logic_vector(8 downto 0);
-      br5 : in std_logic;
-      bg5 : out std_logic;
-      int_vector5 : in std_logic_vector(8 downto 0);
-      bg4 : out std_logic;                                           -- interrupt request, 4
-      br4 : in std_logic;                                            -- interrupt grant, 4
-      int_vector4 : in std_logic_vector(8 downto 0);                 -- interrupt vector, 4
-
-      mmutrap : in std_logic;                                        -- if '1', the mmu requests a trap to be serviced after the current instruction completes
-      ack_mmutrap : out std_logic;                                   -- if '1', the mmu trap request is being acknowledged
-      mmuabort : in std_logic;                                       -- if '1', the mmu requests that the current instruction is aborted because of a mmu fault
-      ack_mmuabort : out std_logic;                                  -- if '1', the mmu abort request is being acknowledged
-
-      npr : in std_logic;                                            -- non-processor request
-      npg : out std_logic;                                           -- non-processor grant
-
-      nxmabort : in std_logic;                                       -- nxm abort - a memory access cycle by the cpu refers to an address that does not exist
-      oddabort : in std_logic;                                       -- odd abort - a memory access cycle by the cpu is for a full word, but uses an odd address
-      illhalt : out std_logic;                                       -- a halt instruction was not executed because it was illegal in the current mode; for use in the cer cpu error register
-      ysv : out std_logic;                                           -- a yellow stack trap is in progress - for use in the cer cpu error register
-      rsv : out std_logic;                                           -- a red stack trap is in progress - for use in the cer cpu error register
-
-      cpu_stack_limit : in std_logic_vector(15 downto 0);            -- the cpu stack limit control register value
-      cpu_kmillhalt : in std_logic;                                  -- the control register setting for kernel mode illegal halt
-
-      sr0_ic : out std_logic;                                        -- sr0/mmr0 instruction complete flag
-      sr1 : out std_logic_vector(15 downto 0);                       -- sr1/mmr1, address of the current instruction
-      sr2 : out std_logic_vector(15 downto 0);                       -- sr2, register autoincrement/autodecrement information for instruction restart
-      dstfreference : out std_logic;                                 -- if '1', the destination reference is the final reference for this addressing mode
-      sr3csmenable : in std_logic;                                   -- if '1', the enable csm instruction flag in sr3/mmr3 is set
-
-      psw_in : in std_logic_vector(15 downto 0);                     -- psw input from the control register address @ 177776
-      psw_in_we_even : in std_logic;                                 -- psw input from the control register address @ 177776, write enable for the even address part
-      psw_in_we_odd : in std_logic;                                  -- psw input from the control register address @ 177776, write enable for the odd address part
-      psw_out : out std_logic_vector(15 downto 0);                   -- psw output, current psw that the cpu uses
-
-      pir_in : in std_logic_vector(15 downto 0);                     -- pirq value input from the control register
-
-      modelcode : in integer range 0 to 255;                         -- cpu model code
-      have_fp : in integer range 0 to 2 := 2;                        -- floating point; 0=force disable; 1=force enable; 2=follow default for cpu model
-      have_fpa : in integer range 0 to 1 := 0;                       -- floating point accelerator present with J11 cpu
-      init_r7 : in std_logic_vector(15 downto 0) := x"f600";         -- start address after reset = o'173000' = m9312 hi rom
-      init_psw : in std_logic_vector(15 downto 0) := x"00e0";        -- initial psw for kernel mode, primary register set, priority 7
-
-      cons_load : in std_logic := '0';                               -- load, pulse '1'
-      cons_exa : in std_logic := '0';                                -- examine, pulse '1'
-      cons_dep : in std_logic := '0';                                -- deposit, pulse '1'
-      cons_cont : in std_logic := '0';                               -- continue, pulse '1'
-      cons_ena : in std_logic := '1';                                -- ena/halt, '1' is enable, '0' is halt
-      cons_start : in std_logic := '0';                              -- start, pulse '1'
-      cons_sw : in std_logic_vector(21 downto 0) := (others => '0'); -- front panel switches
-      cons_consphy : out std_logic_vector(21 downto 0);              -- console address
-      cons_exadep : out std_logic;                                   -- '1' when running an examine or deposit memory cycle from the console
-      cons_adrserr : out std_logic;                                  -- '1' when last access from console caused an nxmabort
-      cons_br : out std_logic_vector(15 downto 0);                   -- bus register for the console displays
-      cons_shfr : out std_logic_vector(15 downto 0);                 -- shfr register for the console displays
-      cons_maddr : out std_logic_vector(15 downto 0);                -- microcode address fpu/cpu
-
-      cons_run : out std_logic;                                      -- '1' if executing instructions (incl wait)
-      cons_pause : out std_logic;                                    -- '1' if bus has been relinquished to npr
-      cons_master : out std_logic;                                   -- '1' if cpu is bus master and not running
-      cons_kernel : out std_logic;                                   -- '1' if kernel mode
-      cons_super : out std_logic;                                    -- '1' if super mode
-      cons_user : out std_logic;                                     -- '1' if user mode
-
-      clk : in std_logic;                                            -- input clock
-      reset : in std_logic                                           -- reset cpu, also causes init signal to devices on the bus to be asserted
-   );
-end component;
-
-component mmu is
-   port(
-      cpu_addr_v : in std_logic_vector(15 downto 0);
-      cpu_datain : out std_logic_vector(15 downto 0);
-      cpu_dataout : in std_logic_vector(15 downto 0);
-      cpu_rd : in std_logic;
-      cpu_wr : in std_logic;
-      cpu_dw8 : in std_logic;
-      cpu_cp : in std_logic;
-
-      mmutrap : out std_logic;
-      ack_mmutrap : in std_logic;
-      mmuabort : out std_logic;
-      ack_mmuabort : in std_logic;
-
-      mmuoddabort : out std_logic;
-
-      sr0_ic : in std_logic;
-      sr1_in : in std_logic_vector(15 downto 0);
-      sr2_in : in std_logic_vector(15 downto 0);
-      dstfreference : in std_logic;
-      sr3csmenable : out std_logic;
-      ifetch : in std_logic;
-
-      -- lma (f11)
-      mmu_lma_c1 : out std_logic;
-      mmu_lma_c0 : out std_logic;
-      mmu_lma_eub : out std_logic_vector(21 downto 0);
-
-      bus_unibus_mapped : out std_logic;
-
-      bus_addr : out std_logic_vector(21 downto 0);
-      bus_dati : in std_logic_vector(15 downto 0);
-      bus_dato : out std_logic_vector(15 downto 0);
-      bus_control_dati : out std_logic;
-      bus_control_dato : out std_logic;
-      bus_control_datob : out std_logic;
-
-      unibus_addr : out std_logic_vector(17 downto 0);
-      unibus_dati : in std_logic_vector(15 downto 0);
-      unibus_dato : out std_logic_vector(15 downto 0);
-      unibus_control_dati : out std_logic;
-      unibus_control_dato : out std_logic;
-      unibus_control_datob : out std_logic;
-
-      unibus_busmaster_addr : in std_logic_vector(17 downto 0);
-      unibus_busmaster_dati : out std_logic_vector(15 downto 0);
-      unibus_busmaster_dato : in std_logic_vector(15 downto 0);
-      unibus_busmaster_control_dati : in std_logic;
-      unibus_busmaster_control_dato : in std_logic;
-      unibus_busmaster_control_datob : in std_logic;
-      unibus_busmaster_control_npg : in std_logic;
-
-      cons_exadep : in std_logic := '0';
-      cons_consphy : in std_logic_vector(21 downto 0) := (others => '0');
-      cons_adss_mode : in std_logic_vector(1 downto 0) := (others => '0');
-      cons_adss_id : in std_logic := '0';
-      cons_adss_cons : in std_logic := '0';
-      cons_map16 : out std_logic;
-      cons_map18 : out std_logic;
-      cons_map22 : out std_logic;
-      cons_id : out std_logic;
-
-      modelcode : in integer range 0 to 255;
-      sr0out_debug : out std_logic_vector(15 downto 0);
-      have_odd_abort : out integer range 0 to 255;
-
-      psw : in std_logic_vector(15 downto 0);
-      id : in std_logic;
-      reset : in std_logic;
-      clk : in std_logic
-  );
-end component;
-
-component cr is
-   port(
-      bus_addr_match : out std_logic;
-      bus_addr : in std_logic_vector(17 downto 0);
-      bus_dati : out std_logic_vector(15 downto 0);
-      bus_dato : in std_logic_vector(15 downto 0);
-      bus_control_dati : in std_logic;
-      bus_control_dato : in std_logic;
-      bus_control_datob : in std_logic;
-
--- psw
-      psw_in : out std_logic_vector(15 downto 0);
-      psw_in_we_even : out std_logic;
-      psw_in_we_odd : out std_logic;
-      psw_out : in std_logic_vector(15 downto 0);
-
--- stack limit
-      cpu_stack_limit : out std_logic_vector(15 downto 0);
-
--- pirq
-      pir_in : out std_logic_vector(15 downto 0);
-
--- cer
-      cpu_illegal_halt : in std_logic;
-      cpu_address_error : in std_logic;
-      cpu_nxm : in std_logic;
-      cpu_iobus_timeout : in std_logic;
-      cpu_ysv : in std_logic;
-      cpu_rsv : in std_logic;
-
--- lma (f11)
-      mmu_lma_c1 : in std_logic := '0';
-      mmu_lma_c0 : in std_logic := '0';
-      mmu_lma_eub : in std_logic_vector(21 downto 0) := (others => '0');
-
--- maintenance register (j11)
-      cpu_kmillhalt : out std_logic;
-
--- model code
-
-      modelcode : in integer range 0 to 255;
-      have_fpa : in integer range 0 to 1 := 0;                       -- floating point accelerator present with J11 cpu
-
---
-      reset : in std_logic;
-      clk : in std_logic
-   );
-end component;
-
-component kl11 is
-   port(
-      base_addr : in std_logic_vector(17 downto 0);
-      ivec : in std_logic_vector(8 downto 0);
-      ovec : in std_logic_vector(8 downto 0);
-
-      br : out std_logic;
-      bg : in std_logic;
-      int_vector : out std_logic_vector(8 downto 0);
-
-      bus_addr_match : out std_logic;
-      bus_addr : in std_logic_vector(17 downto 0);
-      bus_dati : out std_logic_vector(15 downto 0);
-      bus_dato : in std_logic_vector(15 downto 0);
-      bus_control_dati : in std_logic;
-      bus_control_dato : in std_logic;
-      bus_control_datob : in std_logic;
-
-      tx : out std_logic;
-      rx : in std_logic;
-      rts : out std_logic;
-      cts : in std_logic;
-
-      have_kl11 : in integer range 0 to 1;
-      have_kl11_force7bit : in integer range 0 to 1;
-      have_kl11_rtscts : in integer range 0 to 1;
-      have_kl11_bps : in integer range 1200 to 230400;
-
-      reset : in std_logic;
-
-      clk50mhz : in std_logic;
-
-      clk : in std_logic
-   );
-end component;
+architecture implementation of vt10x is
 
 component vtbr is
    port(
@@ -702,7 +455,7 @@ begin
       clk => nclk
    );
 
-   cr0: cr port map(
+   cr0: cr11 port map(
       bus_addr_match => cr_addr_match,
       bus_addr => unibus_addr,
       bus_dati => cr_dati,

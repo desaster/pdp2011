@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -570,7 +570,7 @@ begin
       0 when others;
 
    with modelcode select have_ubm <=   -- does the system have the unibus map
-      1 when 24,
+      1 when 23 | 24,
       1 when 44,
       1 when 70,
       1 when 73 | 83 | 84 | 93 | 94,         -- kdj11 FIXME, this incorrectly causes the non-unibus systems to include the map - probably incorrect. What is required is probably only to mechanize the mmr3 bit, because at least zkdj tests it.
@@ -650,6 +650,7 @@ begin
       0 when others;
 
    with modelcode select have_oddabort <= -- does the system detect odd address errors
+      0 when 3,
       0 when 23 | 24,                        -- kdf11
       1 when others;
    have_odd_abort <= have_oddabort;                                  -- the unibus component needs this too

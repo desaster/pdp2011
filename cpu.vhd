@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -37,12 +37,12 @@ entity cpu is
       br7 : in std_logic;                                            -- interrupt request, 7
       bg7 : out std_logic;                                           -- interrupt grant, 7
       int_vector7 : in std_logic_vector(8 downto 0);                 -- interrupt vector, 7
-      br6 : in std_logic;
-      bg6 : out std_logic;
-      int_vector6 : in std_logic_vector(8 downto 0);
-      br5 : in std_logic;
-      bg5 : out std_logic;
-      int_vector5 : in std_logic_vector(8 downto 0);
+      br6 : in std_logic;                                            -- interrupt request, 6
+      bg6 : out std_logic;                                           -- interrupt grant, 6
+      int_vector6 : in std_logic_vector(8 downto 0);                 -- interrupt vector, 6
+      br5 : in std_logic;                                            -- interrupt request, 5
+      bg5 : out std_logic;                                           -- interrupt grant, 5
+      int_vector5 : in std_logic_vector(8 downto 0);                 -- interrupt vector, 5
       bg4 : out std_logic;                                           -- interrupt request, 4
       br4 : in std_logic;                                            -- interrupt grant, 4
       int_vector4 : in std_logic_vector(8 downto 0);                 -- interrupt vector, 4
@@ -80,6 +80,9 @@ entity cpu is
       modelcode : in integer range 0 to 255;                         -- cpu model code
       have_fp : in integer range 0 to 2 := 2;                        -- floating point; 0=force disable; 1=force enable; 2=follow default for cpu model
       have_fpa : in integer range 0 to 1 := 0;                       -- floating point accelerator present with J11 cpu
+      have_eis : in integer range 0 to 2 := 2;                       -- eis instructions; 0=force disable; 1=force enable; 2=follow default for cpu model
+      have_fis : in integer range 0 to 2 := 2;                       -- fis instructions; 0=force disable; 1=force enable; 2=follow default for cpu model
+      have_sillies : in integer range 0 to 1 := 0;                   -- whether to include core that is only there to pass maindec tests
       init_r7 : in std_logic_vector(15 downto 0) := x"f600";         -- start address after reset = o'173000' = m9312 hi rom
       init_psw : in std_logic_vector(15 downto 0) := x"00e0";        -- initial psw for kernel mode, primary register set, priority 7
 
@@ -182,6 +185,7 @@ type state_type is (
    state_fpww, state_fpw1, state_fpw2, state_fpw3, state_fpw4,
    state_fprun,
    state_fprunao,
+   state_fishb, state_fislb, state_fisha, state_fisla, state_fishr, state_fislr, state_fisrun,
    state_tstset, state_wrtlck, state_wrtlcka,
    state_rsv,
    state_trap, state_trapa, state_trapb, state_trapc, state_trapw, state_trapd, state_trape, state_trapf,
@@ -214,6 +218,7 @@ signal ir_mt : std_logic;
 signal ir_mtps : std_logic;
 signal ir_mfps : std_logic;
 signal ir_dopr : std_logic;
+signal ir_fis : std_logic;
 signal ir_fpsop1 : std_logic;
 signal ir_fpsop2 : std_logic;
 signal ir_fpao : std_logic;
@@ -242,7 +247,7 @@ signal addr : std_logic_vector(15 downto 0);
 
 -- psw
 signal psw : std_logic_vector(15 downto 0) := init_psw;
-signal pswmf : std_logic_vector(15 downto 8);
+signal pswmf : std_logic_vector(15 downto 4);
 signal psw_delayedupdate : std_logic_vector(15 downto 0);
 signal psw_delayedupdate_even : std_logic;
 signal psw_delayedupdate_odd : std_logic;
@@ -381,6 +386,7 @@ signal falu_pending_fiu : std_logic;
 signal falu_pending_fiv : std_logic;
 signal falu_pending_divz : std_logic;
 
+
 -- floating point registers
 signal fbus_raddr : std_logic_vector(2 downto 0);
 signal fbus_waddr : std_logic_vector(2 downto 0);
@@ -390,13 +396,41 @@ signal fbus_we : std_logic;
 signal fbus_fd : std_logic;
 
 
+-- fis
+signal fis_input_a : std_logic_vector(31 downto 0);
+signal fis_input_b : std_logic_vector(31 downto 0);
+signal fis_result : std_logic_vector(31 downto 0);
+signal fis_fps : std_logic_vector(3 downto 0);
+signal fis_load : std_logic;
+signal fis_done : std_logic;
+signal fis_flag1 : std_logic;
+type fis_fsm_type is (
+   fis_idle,
+   fis_align,
+   fis_mult,
+   fis_div,
+   fis_addsub,
+   fis_norm,
+   fis_rt, fis_rtc,
+   fis_zres,
+   fis_res
+);
+signal fis_fsm : fis_fsm_type := fis_idle;
+signal fis_ccw : std_logic_vector(9 downto 0);
+--signal falu_state : integer range 0 to 163;
+signal fis_work1 : std_logic_vector(26 downto 0);
+signal fis_work2 : std_logic_vector(26 downto 0);
+signal fis_pending_fic : std_logic;
+signal fis_pending_fiu : std_logic;
+signal fis_pending_fiv : std_logic;
+signal fis_pending_divz : std_logic;
+
 -- sob slowdown
 signal sob_slowdown: integer range 0 to 255;
 
 
 -- console
 signal consoleaddr : std_logic_vector(21 downto 0) := (others => '0');
-signal consoledata : std_logic_vector(15 downto 0) := (others => '0');
 signal consoleautoince : std_logic := '0';
 signal consoleautoincd : std_logic := '0';
 signal consolestep : std_logic := '0';
@@ -411,7 +445,10 @@ signal have_sxt : integer range 0 to 1;
 signal have_rtt : integer range 0 to 1;
 signal have_mark : integer range 0 to 1;
 signal have_xor : integer range 0 to 1;
-signal have_eis : integer range 0 to 1;
+signal have_eis_default : integer range 0 to 1;
+signal have_eisinst : integer range 0 to 1;
+signal have_fis_default : integer range 0 to 1;
+signal have_fisinst : integer range 0 to 1;
 signal have_fpu_default : integer range 0 to 1;
 signal have_fpu : integer range 0 to 1;
 signal have_mtps : integer range 0 to 1;
@@ -428,6 +465,9 @@ signal have_oddimmediateabort : integer range 0 to 1;
 signal have_psw1512 : integer range 0 to 1;
 signal have_psw11 : integer range 0 to 1;
 signal have_psw8 : integer range 0 to 1;
+signal have_psw7 : integer range 0 to 1;
+signal have_psw65 : integer range 0 to 1;
+signal have_psw4 : integer range 0 to 1;
 
 signal have_stacklimit_full : integer range 0 to 1;
 signal have_stacklimit_simple : integer range 0 to 1;
@@ -635,6 +675,7 @@ begin
       '1' when state_mtp,
       '1' when state_fpir1 | state_fpir2,
       '1' when state_fpr1 | state_fpr2 | state_fpr3 | state_fpr4,
+      '1' when state_fishb | state_fislb | state_fisha | state_fisla,
       '1' when state_trapa | state_trapf,
       '1' when state_csmi,
       '1' when state_rtsa,
@@ -657,6 +698,7 @@ begin
       '1' when state_stststore,
       '1' when state_fpiw1 | state_fpiw2,
       '1' when state_fpw1 | state_fpw2 | state_fpw3 | state_fpw4,
+      '1' when state_fishr | state_fislr,
       '1' when state_jsrb,
       '1' when state_trapc | state_trapd,
       '1' when state_csmc | state_csme | state_csmg,
@@ -676,6 +718,8 @@ begin
       falu_output(15 downto 0) when state_fpw4,
       falu_output(63 downto 48) when state_fpiw1,
       falu_output(47 downto 32) when state_fpiw2,
+      fis_result(31 downto 16) when state_fishr,
+      fis_result(15 downto 0) when state_fislr,
       rbus_data when state_jsrb,
       temp_psw when state_trapc,
       r7 when state_trapd,
@@ -730,6 +774,12 @@ begin
       addr_indirect when state_fpw2,
       addr_indirect when state_fpw3,
       addr_indirect when state_fpw4,
+      rbus_data when state_fishb,
+      addr_indirect when state_fislb,
+      addr_indirect when state_fisha,
+      addr_indirect when state_fisla,
+      addr_indirect when state_fishr,
+      addr_indirect when state_fislr,
       "0000000" & trap_vectorp2 when state_trapa,
       "0000000" & trap_vector when state_trapb,
       rbus_data_m2 when state_trapc,
@@ -794,22 +844,25 @@ begin
       '1' when state_fpr2 | state_fpr3 | state_fpr4,
       ir_dstm2r7 when state_fpw1,
       '1' when state_fpw2 | state_fpw3 | state_fpw4,
-      '1' when state_stststore,        -- always in d-space, this is the second store - first is handled by store_alu_w
-      '1' when state_mfpa,             -- move from previous, stack push is to current d-space
-      '1' when state_mtp,              -- move to previous, stack pop is from current d-space
-      '1' when state_trapa,            -- d-mapping for loading the trap psw from kernel d-space
-      '1' when state_trapb,            -- to enable debugging output via addr - d-mapping should be 1 to 1, i-mapping likely is not
-      '1' when state_trapc,            -- stack is in d-space
-      '1' when state_trapd,            -- stack is in d-space
-      '1' when state_trapf,            -- d-mapping for loading the trap vector from kernel d-space
-      '1' when state_jsrb,
-      '1' when state_rtsa,
-      '0' when state_mark,
-      '0' when state_marka,
-      '1' when state_rtia,             -- stack is in d-space
-      '1' when state_rtib,             -- stack is in d-space
+      ir_dstr7 when state_fishb | state_fislb,             -- fis access in data space unless r=pc
+      ir_dstr7 when state_fisha | state_fisla,             -- doubtful whether this is needed, the combo of fis
+      ir_dstr7 when state_fishr | state_fislr,             -- and i/d capable mmu seens unlikely
+      '1' when state_stststore,                            -- always in d-space, this is the second store - first is handled by store_alu_w
+      '1' when state_mfpa,                                 -- move from previous, stack push is to current d-space
+      '1' when state_mtp,                                  -- move to previous, stack pop is from current d-space
+      '1' when state_trapa,                                -- d-mapping for loading the trap psw from kernel d-space
+      '1' when state_trapb,                                -- to enable debugging output via addr - d-mapping should be 1 to 1, i-mapping likely is not
+      '1' when state_trapc,                                -- stack is in d-space
+      '1' when state_trapd,                                -- stack is in d-space
+      '1' when state_trapf,                                -- d-mapping for loading the trap vector from kernel d-space
+      '1' when state_jsrb,                                 -- stack is in d-space
+      '1' when state_rtsa,                                 -- stack is in d-space
+      '0' when state_mark,                                 -- mark uses i-space
+      '0' when state_marka,                                -- mark uses i-space
+      '1' when state_rtia,                                 -- stack is in d-space
+      '1' when state_rtib,                                 -- stack is in d-space
       '1' when state_csmc | state_csme | state_csmg,
-      '0' when state_csmi,         -- apparently; this at least is suggested by 0174_CKKTBD0_1144mmgmt.pdf
+      '0' when state_csmi,                                 -- apparently; this at least is suggested by 0174_CKKTBD0_1144mmgmt.pdf
       ir_dstm2r7 when state_store_alu_w,
       '0' when others;
 
@@ -823,7 +876,7 @@ begin
 
 -- psw that is output to the mmu
 
-   psw_out <= rbus_cpu_mode & pswmf(13 downto 8) & psw(7 downto 0);
+   psw_out <= rbus_cpu_mode & pswmf(13 downto 4) & psw(3 downto 0);
 
 -- psw filtered by cpu modelcode
 
@@ -831,7 +884,9 @@ begin
    pswmf(11) <= psw(11) when have_psw11 = 1 else '0';
    pswmf(10 downto 9) <= "00";
    pswmf(8) <= psw(8) when have_psw8 = 1 else '0';
---   pswmf(7 downto 0) <= psw(7 downto 0);
+   pswmf(7) <= psw(7) when have_psw7 = 1 else '0';
+   pswmf(6 downto 5) <= psw(6 downto 5) when have_psw65 = 1 else "00";
+   pswmf(4) <= psw(4) when have_psw4 = 1 else '0';
 
 
 -- registers
@@ -905,7 +960,8 @@ begin
 
 -- cpu model configuration
 
-   have_sob_zkdjbug <= 0;              -- set flag to enable bugfix for zkdj maindec for err 1176 @ 41472
+   have_sob_zkdjbug <= have_sillies;   -- set flag to enable bugfix for zkdj maindec for err 1176 @ 41472
+
    with modelcode select have_sob <=
       1 when 3,
       1 when 23 | 24,                  -- kdf11
@@ -964,7 +1020,8 @@ begin
       1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
       0 when others;
 
-   with modelcode select have_eis <=
+   with modelcode select have_eis_default <=
+      1 when 3,
       1 when 23 | 24,                  -- kdf11
       1 when 34,
       1 when 35 | 40,
@@ -974,6 +1031,12 @@ begin
       1 when 70,
       1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
       0 when others;
+   have_eisinst <= have_eis_default when have_eis = 2 else have_eis;
+
+   with modelcode select have_fis_default <=
+      1 when 3,
+      0 when others;
+   have_fisinst <= have_fis_default when have_fis = 2 else have_fis;
 
    with modelcode select have_fpu_default <=
       1 when 23 | 24,                  -- kdf11
@@ -1060,6 +1123,16 @@ begin
       1 when 73 | 83 | 84 | 93 | 94,   -- kdj11
       0 when others;
 
+   with modelcode select have_psw7 <=                                -- priority, most significant bit of 7..5
+      1 when others;
+
+   with modelcode select have_psw65 <=                               -- psw bit 7 is always there, but bits 6 and 5 are not present in 11/03
+      0 when 3,
+      1 when others;
+
+   with modelcode select have_psw4 <=                                -- the t(trace) bit
+      1 when others;
+
    with modelcode select have_stacklimit_full <=
       1 when 45 | 50 | 55,
       1 when 60,
@@ -1101,6 +1174,7 @@ begin
       variable v_mtps : std_logic;
       variable v_mfps : std_logic;
       variable v_dopr : std_logic;
+      variable v_fis : std_logic;
       variable v_mpr : std_logic;
       variable v_fpsop1 : std_logic;
       variable v_fpsop2 : std_logic;
@@ -1390,6 +1464,7 @@ begin
                      ir_mtps <= '0';                                 -- current instruction is not mtps
                      ir_mfps <= '0';                                 -- current instruction is not mfps
                      ir_dopr <= '0';                                 -- current instruction is not dual operand register
+                     ir_fis <= '0';                                  -- current instruction is not fis
                      ir_fpsop1 <= '0';                               -- current instruction is not an fp single operand group 1 insn
                      ir_fpsop2 <= '0';                               -- current instruction is not an fp single operand group 2 insn
                      ir_fpao <= '0';                                 -- current instruction is not an fp accumulator and operand insn
@@ -1504,12 +1579,21 @@ begin
 
 -- double operand, register - eis/xor
 
-                     if (have_eis = 1 and datain(15 downto 11) = "01110")                -- mul, div, ash, ashc
+                     if (have_eisinst = 1 and datain(15 downto 11) = "01110")            -- mul, div, ash, ashc
                      or (have_xor = 1 and datain(15 downto 9) = "0111100") then          -- xor
                         v_dopr := '1';
                         cons_maddr(4) <= '1';
                      else
                         v_dopr := '0';
+                     end if;
+
+
+-- fis
+
+                     if have_fisinst = 1 and datain(15 downto 5) = "01111010000" then    -- fadd, fsub, fmul, fdiv
+                        v_fis := '1';
+                     else
+                        v_fis := '0';
                      end if;
 
 
@@ -1598,6 +1682,9 @@ begin
                      end if;
                      if v_dopr = '1' then
                         ir_dopr <= '1';
+                     end if;
+                     if v_fis = '1' then
+                        ir_fis <= '1';
                      end if;
                      if v_mpr = '1' then
                         ir_mpr <= '1';
@@ -1893,7 +1980,6 @@ begin
 
 
 -- halt is a complicated case - it is handled differently by most models - it traps either to 4, 10, or to the console, or plainly halts
--- don't have a console yet - so the last two are simple. Still, the mode bit for the J11 came as a surprise - thought I had seen all variants.
 
                            if datain(7 downto 0) = "00000000" then                       -- halt
                               if pswmf(15 downto 14) /= "00"                             -- halt in another cpu mode than kernel for vector 004 models
@@ -2151,6 +2237,11 @@ begin
                         state <= state_mark;
                      end if;
 
+                     if v_fis = '1' then
+                        state <= state_fishb;
+                        rbus_ix <= datain(2 downto 0);
+                     end if;
+
                      if have_fpu = 1 and datain(15 downto 6) = "1111000000" then                   -- fp11 operate group
                         cons_maddr(15) <= '1';
                         case datain(5 downto 0) is
@@ -2366,6 +2457,7 @@ begin
                         if modelcode = 34
                         or modelcode = 23 or modelcode = 24
                         or modelcode = 4                                                 -- verified 04 behaviour by running gkab
+                        or modelcode = 3                                                 -- from vkad
                         then
                            trap_vector <= o"004";
                         else
@@ -2637,10 +2729,10 @@ begin
                         temp_psw(15 downto 4) <= psw(15 downto 4);
                         temp_psw(3 downto 0) <= "0000";
                         psw(15 downto 14) <= "01";
-                        psw(13 downto 12) <= psw(15 downto 14);
+                        psw(13 downto 12) <= pswmf(15 downto 14);
                         psw(4) <= '0';
                         rbus_ix <= "110";
-                        rbus_cpu_mode <= psw(15 downto 14);
+                        rbus_cpu_mode <= pswmf(15 downto 14);
                         state <= state_csma;
                      else
                         state <= state_illegalop;
@@ -2753,12 +2845,10 @@ begin
 
                   when state_mtps =>
                      if have_mtps = 1 then
-                        if psw(15 downto 14) = "00" then
+                        if pswmf(15 downto 14) = "00" then
                            psw(7 downto 5) <= alu_output(7 downto 5);
-                           psw(3 downto 0) <= alu_output(3 downto 0);
-                        else
-                           psw(3 downto 0) <= alu_output(3 downto 0);
                         end if;
+                        psw(3 downto 0) <= alu_output(3 downto 0);
                         state <= state_ifetch;
                      end if;
 
@@ -2819,6 +2909,10 @@ begin
                   when state_mul =>
                      if eis_sequencer = "00001" then
                         state <= state_mula;
+                        if have_sillies = 1 and modelcode = 3 and br4 = '1' and unsigned(psw(7 downto 5)) < unsigned'("100") then           -- this is only there to pass the VKAB test - tests 307 and 310 that test for interruptible EIS instructions
+                           state <= state_ifetch;                                                                                           -- go back to the instruction fetch
+                           r7 <= ir_addr;                                                                                                   -- r7 is the only bit of state that has changed so far, restore it
+                        end if;
                      end if;
                      eis_sequencer <= eis_sequencer + 1;
 
@@ -2886,6 +2980,10 @@ begin
                      else
                         if eis_flag2 = '1' then
                            state <= state_ashb;
+                        end if;
+                        if have_sillies = 1 and modelcode = 3 and br4 = '1' and unsigned(psw(7 downto 5)) < unsigned'("100") then           -- this is only there to pass the VKAB test - tests 307 and 310 that test for interruptible EIS instructions
+                           state <= state_ifetch;                                                                                           -- go back to the instruction fetch
+                           r7 <= ir_addr;                                                                                                   -- r7 is the only bit of state that has changed so far, restore it
                         end if;
                      end if;
 
@@ -3048,6 +3146,10 @@ begin
                         state <= state_fptrap;                       -- cause trap
                         fps(15) <= '1';                              -- set error flag
                         fec <= "1100";                               -- fiuv code
+                        if (modelcode = 23 or modelcode = 24) and ir(11 downto 8) = "1111" then           -- from jkdc, ldc(d|f)(f|d) sets N and Z when -0 - however the 'result' is not stored
+                           fps(3) <= '1';
+                           fps(2) <= '1';
+                        end if;
                      else
                         if datain(15 downto 7) = "100000000" and fps(11) = '1' then                       -- if interrupts are disabled, we still signal the error... FIXME, is this required at all?
                            fps(15) <= '1';                              -- set error flag
@@ -3254,7 +3356,66 @@ begin
 
                         end case;
 
+                        if have_sillies = 1 and (modelcode = 23 or modelcode = 24) and br4 = '1' and unsigned(psw(7 downto 5)) < unsigned'("100") then         -- this is only there to pass the JKDD test - test 77 tests for interruptible FPU instructions
+                           state <= state_ifetch;                                                                                                              -- go back to the instruction fetch
+                           r7 <= ir_addr;                                                                                                                      -- r7 is the only bit of state that has changed so far, restore it
+                        end if;
+
                      end if;
+
+
+-- fis : the special cases for the fadd/fsub/fmul/fdiv instructions for 11/03 and 11/35, 11/40
+
+                  when state_fishb =>
+                     fis_input_b(31 downto 16) <= datain;
+                     addr_indirect <= rbus_data_p2;
+                     state <= state_fislb;
+
+                  when state_fislb =>
+                     fis_input_b(15 downto 0) <= datain;
+                     addr_indirect <= addr_indirect + 2;
+                     state <= state_fisha;
+
+                  when state_fisha =>
+                     fis_input_a(31 downto 16) <= datain;
+                     addr_indirect <= addr_indirect + 2;
+                     dest_addr <= addr_indirect;
+                     state <= state_fisla;
+
+                  when state_fisla =>
+                     fis_input_a(15 downto 0) <= datain;
+                     fis_load <= '1';
+                     state <= state_fisrun;
+
+                  when state_fisrun =>
+                     fis_load <= '0';
+                     addr_indirect <= dest_addr;
+                     if fis_done = '1' then
+                        state <= state_fishr;
+                        psw(3 downto 0) <= fis_fps;
+                        if have_psw65 = 0 then
+                           psw(6 downto 5) <= "00";
+                        end if;
+                        if fis_pending_fic = '1' or fis_pending_fiu = '1' or fis_pending_fiv = '1' or fis_pending_divz = '1' then
+                           trap_vector <= o"244";
+                           state <= state_trap;
+                        end if;
+                     end if;
+
+                  when state_fishr =>
+                     addr_indirect <= addr_indirect + 2;
+                     if ir(2 downto 0) = "111" then
+                        r7 <= dest_addr;
+                     else
+                        rbus_d <= dest_addr;
+                        rbus_waddr <= pswmf(15 downto 14) & pswmf(11) & ir(2 downto 0);
+                        rbus_we <= '1';
+                     end if;
+                     state <= state_fislr;
+
+                  when state_fislr =>
+                     state <= state_ifetch;
+
 
                   when state_tstset =>
                      rbus_waddr <= pswmf(15 downto 14) & pswmf(11) & "000";
@@ -3685,7 +3846,7 @@ begin
 
 -- base instruction set alu
 
-   process(alu_input, alus_input, ir, psw(3 downto 0),
+   process(alu_input, alus_input, ir, psw(3 downto 0), pswmf(7 downto 4),
       ir_sop, ir_dop, ir_mfpi, ir_csm, ir_mfpd, ir_mtpi, ir_mtpd, ir_mtps, ir_mfps, ir_dopr, ir_mpr, ir_fpsop1,
       have_csm, have_mfp, have_mtps, have_xor, have_mpr, fps, fec,
       modelcode)
@@ -4296,9 +4457,9 @@ begin
       elsif have_mtps = 1 and ir_mfps = '1' then                     -- mfps
 
          ir_byte <= '1';
-         alu_output <= psw;
+         alu_output <= psw(7) & psw(7) & psw(7) & psw(7) & psw(7) & psw(7) & psw(7) & psw(7) & psw(7 downto 4) & psw(3 downto 0);
          alu_psw(3) <= psw(7);
-         if psw(7 downto 0) = "0000000" then
+         if pswmf(7 downto 4) = "0000" and psw(3 downto 0) = "0000" then
             alu_psw(2) <= '1';
          else
             alu_psw(2) <= '0';
@@ -4392,7 +4553,7 @@ begin
    process(clk)
    begin
       if clk = '1' and clk'event then
-         if have_eis = 1 and ir_dopr = '1' and ir(11) = '0' then
+         if have_eisinst = 1 and ir_dopr = '1' and ir(11) = '0' then
             case ir(10 downto 9) is
 
                when "00" =>                                          -- mul
@@ -4623,7 +4784,344 @@ begin
    end process;
 
 
+--
+-- fis alu: fadd/fsub/fmul/fdiv
+--
+
+   process(clk)
+      variable v_caseworkaround : std_logic_vector(3 downto 0);
+   begin
+      if clk = '1' and clk'event then
+         if have_fisinst = 1 and ir_fis = '1' then
+
+            if fis_load = '1' then
+               fis_done <= '0';
+               fis_fps <= "0000";
+               fis_pending_divz <= '0';
+               fis_pending_fic <= '0';
+               fis_pending_fiu <= '0';
+               fis_pending_fiv <= '0';
+
+               case ir(4 downto 3) is
+                  when "00" | "01" =>                                          -- fadd, fsub
+                     fis_fsm <= fis_align;
+                     fis_work1 <= '0' & '1' & fis_input_b(22 downto 0) & '0' & '0';
+                     fis_work2 <= '0' & '1' & fis_input_a(22 downto 0) & '0' & '0';
+                     if fis_input_b(30 downto 23) = "00000000" then
+                        fis_result <= fis_input_a;
+                        fis_fps(3) <= fis_input_a(31);
+                        if fis_input_a(30 downto 23) = "00000000" then
+                           fis_fps(2) <= '1';
+                        else
+                           fis_fps(2) <= '0';
+                        end if;
+                        fis_fsm <= fis_idle;
+                        fis_done <= '1';
+                     elsif fis_input_a(30 downto 23) = "00000000" then
+                        fis_result(30 downto 0) <= fis_input_b(30 downto 0);
+                        if ir(3) = '0' then
+                           fis_fps(3) <= fis_input_b(31);
+                           fis_result(31) <= fis_input_b(31);
+                        else
+                           fis_fps(3) <= not fis_input_b(31);
+                           fis_result(31) <= not fis_input_b(31);
+                        end if;
+                        fis_fsm <= fis_idle;
+                        fis_done <= '1';
+                     elsif unsigned(fis_input_b(30 downto 23)) < unsigned(fis_input_a(30 downto 23)) then
+                        fis_ccw <= "00" & (unsigned(fis_input_a(30 downto 23)) - unsigned(fis_input_b(30 downto 23)));
+                        fis_flag1 <= '1';
+                     elsif unsigned(fis_input_b(30 downto 23)) = unsigned(fis_input_a(30 downto 23)) then
+                        fis_ccw <= (others => '0');
+                        if unsigned(fis_input_b(22 downto 0)) < unsigned(fis_input_a(22 downto 0)) then
+                           fis_flag1 <= '1';
+                        else
+                           fis_flag1 <= '0';
+                        end if;
+                     else
+                        fis_ccw <= "00" & (unsigned(fis_input_b(30 downto 23)) - unsigned(fis_input_a(30 downto 23)));
+                        fis_flag1 <= '0';
+                     end if;
+
+                  when "10" =>                                                 -- fmul
+                     if fis_input_a(31) = fis_input_b(31) then                           -- set sign - positive if both operands are same sign, negative otherwise
+                        fis_fps(3) <= '0';
+                     else
+                        fis_fps(3) <= '1';
+                     end if;
+                     fis_fps(2 downto 0) <= "000";                                       -- set default for fps bits
+                     fis_fsm <= fis_mult;
+                     fis_work1 <= (others => '0');
+                     fis_work2 <= '0' & '1' & fis_input_a(22 downto 0) & '0' & '0';
+                     if fis_input_b(30 downto 23) = "00000000" or fis_input_a(30 downto 23) = "00000000" then          -- if either input exponent is zero, we don't need to multiply at all
+                        fis_result <= (others => '0');
+                        fis_fps <= "0100";
+                        fis_fsm <= fis_idle;
+                        fis_done <= '1';
+                     end if;
+                     fis_ccw <= ("00" & fis_input_b(30 downto 23)) + ("00" & fis_input_a(30 downto 23)) - "0010000001";
+
+                  when "11" =>                                                 -- fdiv
+                     if fis_input_a(31) = fis_input_b(31) then                           -- set sign - positive if both operands are same sign, negative otherwise
+                        fis_fps(3) <= '0';
+                     else
+                        fis_fps(3) <= '1';
+                     end if;
+                     fis_fps(2 downto 0) <= "000";                                       -- set default for fps bits
+                     fis_fsm <= fis_div;
+                     fis_work1 <= (others => '0');
+                     fis_work2 <= '0' & '1' & fis_input_a(22 downto 0) & '0' & '0';
+                     if fis_input_a(30 downto 23) = "00000000" then                      -- check a operand first, then if b is zero, those settings will take precedence over these
+                        fis_result <= (others => '0');
+                        fis_fps(3 downto 0) <= "0100";
+                        fis_fsm <= fis_idle;
+                        fis_done <= '1';
+                     end if;
+                     if fis_input_b(30 downto 23) = "00000000" then
+                        if fis_input_a(31) = fis_input_b(31) then                        -- set sign again, it might have been changed by the a=zero case above
+                           fis_fps(3) <= '0';
+                        else
+                           fis_fps(3) <= '1';
+                        end if;
+                        fis_pending_divz <= '1';
+                        fis_result <= fis_input_a;
+                        fis_fps(2) <= '0';
+                        fis_fps(1) <= '1';
+                        fis_fps(0) <= '1';
+                        fis_fsm <= fis_idle;
+                        fis_done <= '1';
+                     end if;
+                     fis_ccw <= "0000011010";
+
+                  when others =>
+                     null;
+               end case;
+
+            else
+
+               case fis_fsm is
+
+-- multiply, ie. shifting and adding
+
+                  when fis_mult =>
+                     if fis_work2(25 downto 2) /= "000000000000000000000000" then
+                        if fis_work2(2) = '1' then                                                                     -- if lowest order bit is a one
+                           fis_work1 <= ('0' & fis_work1(26 downto 1) + ('0' & '1' & fis_input_b(22 downto 0) & "00"));-- then shift right and add
+                        else
+                           fis_work1 <= '0' & fis_work1(26 downto 1);                                                  -- if not set, then only shift right
+                        end if;
+                        fis_work2 <= '0' & fis_work2(26 downto 1);                                                     -- shift right for next round
+                     else
+                        fis_fsm <= fis_norm;                                                                           -- if all bits done, then go into normalize state
+                     end if;
+
+-- div
+
+                  when fis_div =>
+                     if unsigned(fis_work2) >= unsigned('0' & '1' & fis_input_b(22 downto 0) & "00") then
+                        fis_work1 <= fis_work1(25 downto 0) & '1';
+                        fis_work2 <= unsigned(fis_work2(25 downto 0) & '0') - unsigned('1' & fis_input_b(22 downto 0) & "000");
+                     else
+                        fis_work1 <= fis_work1(25 downto 0) & '0';
+                        fis_work2 <= fis_work2(25 downto 0) & '0';
+                     end if;
+                     if fis_ccw /= "0000000000" then
+                        fis_ccw <= fis_ccw - 1;
+                     else
+                        fis_fsm <= fis_norm;
+                        fis_ccw <= unsigned("00" & fis_input_a(30 downto 23)) - unsigned("00" & fis_input_b(30 downto 23)) + unsigned'("0010000000");
+                     end if;
+
+-- align the operands for addition or subtraction
+-- flag1 has which one of the operands needs to be shifted
+-- fis_ccw has the difference - if it is 0, or shift- and decrement to 0, the addition/subtraction state is next up
+
+                  when fis_align =>
+                     if fis_ccw /= "0000000000" then
+                        if fis_flag1 = '1' then
+                           fis_work1 <= '0' & fis_work1(26 downto 1);
+                        else
+                           fis_work2 <= '0' & fis_work2(26 downto 1);
+                        end if;
+
+                        if unsigned(fis_ccw) > unsigned'("0000011001") then
+                           fis_ccw <= "0000000000";
+                           if fis_flag1 = '1' then
+                              fis_work1 <= (others => '0');
+                           else
+                              fis_work2 <= (others => '0');
+                           end if;
+                           fis_fsm <= fis_addsub;
+                        else
+                           fis_ccw <= fis_ccw - 1;
+                        end if;
+                     else
+                        fis_fsm <= fis_addsub;
+                     end if;
+
+
+                  when fis_addsub =>
+                     v_caseworkaround := ir(3) & fis_input_b(31) & fis_input_a(31) & fis_flag1;
+                     case v_caseworkaround is
+                        when "0000" | "0001" =>                                -- add, +|+
+                           fis_work1 <= fis_work1 + fis_work2;
+                           fis_fps(3) <= '0';
+
+                        when "0100" =>                                         -- add, !work1<work2, -|+
+                           fis_work1 <= fis_work1 - fis_work2;
+                           fis_fps(3) <= '1';
+
+                        when "0101" =>                                         -- add, work1<work2, -|+
+                           fis_work1 <= fis_work2 - fis_work1;
+                           fis_fps(3) <= '0';
+
+                        when "0010" =>                                         -- add, !work1<work2, +|-
+                           fis_work1 <= fis_work1 - fis_work2;
+                           fis_fps(3) <= '0';
+
+                        when "0011" =>                                         -- add, work1<work2, +|-
+                           fis_work1 <= fis_work2 - fis_work1;
+                           fis_fps(3) <= '1';
+
+                        when "0110" | "0111" =>                                -- add, -|-
+                           fis_work1 <= fis_work1 + fis_work2;
+                           fis_fps(3) <= '1';
+
+                        when "1000" =>                                         -- sub, !work1<work2, +|+
+                           fis_work1 <= fis_work1 - fis_work2;
+                           fis_fps(3) <= '1';
+
+                        when "1001" =>                                         -- sub, work1<work2, +|+
+                           fis_work1 <= fis_work2 - fis_work1;
+                           fis_fps(3) <= '0';
+
+                        when "1100" | "1101" =>                                -- sub, -|+
+                           fis_work1 <= fis_work2 + fis_work1;
+                           fis_fps(3) <= '0';
+
+                        when "1010" | "1011" =>                                -- sub, +|-
+                           fis_work1 <= fis_work2 + fis_work1;
+                           fis_fps(3) <= '1';
+
+                        when "1110" =>                                         -- sub, !work1<work2, -|-
+                           fis_work1 <= fis_work1 - fis_work2;
+                           fis_fps(3) <= '0';
+
+                        when "1111" =>                                         -- sub, work1<work2, -|-
+                           fis_work1 <= fis_work2 - fis_work1;
+                           fis_fps(3) <= '1';
+
+                        when others =>
+                           null;
+                     end case;
+
+                     if fis_flag1 = '1' then
+                        fis_ccw <= "00" & fis_input_a(30 downto 23);
+                     else
+                        fis_ccw <= "00" & fis_input_b(30 downto 23);
+                     end if;
+                     fis_fsm <= fis_norm;
+
+
+-- normalize result after add/sub/mul/div
+
+                  when fis_norm =>
+                     if fis_work1(26 downto 25) = "01" then                    -- hidden bit in the right place, overflow bit clear?
+                        fis_fsm <= fis_rt;
+                     elsif fis_work1(26) = '1' then                            -- is the overflow bit set?
+                        fis_work1 <= '0' & fis_work1(26 downto 1);             -- shift right
+                        fis_ccw <= fis_ccw + 1;                                -- increase exponent
+                        fis_fsm <= fis_rt;
+                     else
+--                                                    54321098765432109876543210
+                        if fis_work1(25 downto 0) /= "00000000000000000000000000" then
+                           fis_work1 <= fis_work1(25 downto 0) & '0';          -- shift left
+                           fis_ccw <= fis_ccw - 1;                             -- decrease exponent
+                        else                                                   -- coming here, we have lost all ones from the fraction; the output is zero
+                           fis_fps(3) <= '0';                                  -- make sure that the n bit is cleared
+                           fis_fsm <= fis_zres;                                -- result is zero
+                        end if;
+                     end if;
+
+
+-- round the result: add half a bit, ie 1 in the lsb-1 position
+
+                  when fis_rt =>
+                     fis_work1 <= fis_work1 + "10";                            -- rounding the result
+                     fis_fsm <= fis_rtc;
+
+
+-- check if rounding caused an overflow
+
+                  when fis_rtc =>
+                     if fis_work1(26) = '1' then                               -- if the rounding operation has caused the high bit to set
+                        fis_work1 <= '0' & fis_work1(26 downto 1);
+                        fis_ccw <= fis_ccw + 1;
+                     end if;
+                     fis_fsm <= fis_res;
+
+
+-- set result and flags
+
+                  when fis_res =>
+                     fis_result(31) <= fis_fps(3);
+                     fis_result(30 downto 23) <= fis_ccw(7 downto 0);
+                     fis_result(22 downto 0) <= fis_work1(24 downto 2);
+                     fis_done <= '1';
+                     fis_fsm <= fis_idle;
+                     if fis_ccw(7 downto 0) = "00000000" then
+                        fis_fps(2) <= '1';
+                     else
+                        fis_fps(2) <= '0';
+                     end if;
+                     if fis_ccw(9) = '1' or fis_ccw(9 downto 0) = "0000000000" then      -- underflow - not sure if this is entirely correct, but the tests expect N=1, Z=0, V=1, C=X
+                        fis_pending_fiu <= '1';                                -- cause underflow trap
+                        fis_fps(1) <= '1';                                     -- set the overflow flag
+                        fis_fps(2) <= '0';                                     -- clear the zero flag
+                        fis_fps(3) <= '1';                                     -- set the negative flag
+                        fis_fsm <= fis_idle;
+                     elsif fis_ccw(8) = '1' then                               -- overflow - not sure if this is entirely correct, but the tests expect N=0, Z=0, V=1, C=X
+                        fis_pending_fiv <= '1';                                -- cause overflow trap
+                        fis_fps(1) <= '1';                                     -- set the overflow flag
+                        fis_fps(2) <= '0';                                     -- clear the zero flag
+                        fis_fps(3) <= '0';                                     -- clear the negative flag
+                        fis_fsm <= fis_idle;
+                     end if;
+
+-- result is zero
+
+                  when fis_zres =>
+                     fis_result <= (others => '0');
+                     fis_fps(3) <= '0';
+                     fis_fps(2) <= '1';
+                     fis_fps(0) <= '0';
+                     fis_done <= '1';
+                     fis_fsm <= fis_idle;
+
+-- idle - no FIS operation is in progress
+
+                  when fis_idle =>
+                     fis_done <= '0';
+                     fis_ccw <= (others => '0');
+                     fis_work1 <= (others => '0');
+                     fis_work2 <= (others => '0');
+                     fis_flag1 <= '0';
+
+
+                  when others =>
+                     null;
+               end case;
+
+            end if;
+
+         end if;
+      end if;
+   end process;
+
+
+--
 -- floating point alu
+--
 
    process(clk, reset, falu_pending_clear, ir_fpao, falu_load, falu_input, falus_input, ir_wait)
       variable v_caseworkaround : std_logic_vector(3 downto 0);

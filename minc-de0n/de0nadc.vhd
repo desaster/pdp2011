@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -25,7 +25,8 @@ entity de0nadc is
       ad_done : out std_logic := '0';
       ad_channel : in std_logic_vector(5 downto 0);
       ad_nxc : out std_logic := '0';
-      ad_sample : out std_logic_vector(11 downto 0) := "000000000000";
+      ad_sample : out std_logic_vector(11 downto 0);
+      ad_type : out std_logic_vector(3 downto 0);
 
       ad_ch8 : in std_logic_vector(11 downto 0) := "000000000000";
       ad_ch9 : in std_logic_vector(11 downto 0) := "000000000000";
@@ -83,6 +84,14 @@ entity de0nadc is
       ad_ch61 : in std_logic_vector(11 downto 0) := "000000000000";
       ad_ch62 : in std_logic_vector(11 downto 0) := "000000000000";
       ad_ch63 : in std_logic_vector(11 downto 0) := "000000000000";
+
+      ad_ch8_15 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch16_23 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch24_31 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch32_39 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch40_47 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch48_55 : in std_logic_vector(3 downto 0) := "0000";
+      ad_ch56_63 : in std_logic_vector(3 downto 0) := "0000";
 
       adc_cs_n : out std_logic;
       adc_saddr : out std_logic;
@@ -176,6 +185,16 @@ begin
       ad_ch63 when ad_channel = "111111" else
       "000000000000";
 
+   ad_type <=
+      ad_ch8_15  when ad_channel(5 downto 3) = "001" else
+      ad_ch16_23 when ad_channel(5 downto 3) = "010" else
+      ad_ch24_31 when ad_channel(5 downto 3) = "011" else
+      ad_ch32_39 when ad_channel(5 downto 3) = "100" else
+      ad_ch40_47 when ad_channel(5 downto 3) = "101" else
+      ad_ch48_55 when ad_channel(5 downto 3) = "110" else
+      ad_ch56_63 when ad_channel(5 downto 3) = "111" else
+      "0000";
+
    process(clk50mhz, reset)
    begin
       if clk50mhz = '1' and clk50mhz'event then
@@ -187,7 +206,7 @@ begin
       end if;
    end process;
 
-   process(clk, reset, ad_start, adc_channel)
+   process(clk, reset, ad_start, ad_channel)
    begin
       if clk = '0' and clk'event then
          if reset = '1' then

@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -1234,7 +1234,7 @@ begin
       + ("0000000000000" & rmdc(9 downto 0) & "0")
    when rh_type = 6                                                  -- rmdc * 418, rp06
    else
-      + ("0000" & rmdc(9 downto 0) & "0000000000")
+      ("0000" & rmdc(9 downto 0) & "0000000000")
       + ("00000" & rmdc(9 downto 0) & "000000000")
       + ("00000000" & rmdc(9 downto 0) & "000000")
    when rh_type = 7                                                  -- rmdc * 1600, rp07

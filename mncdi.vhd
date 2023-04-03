@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -43,6 +43,8 @@ entity mncdi is
       event : out std_logic;
 
       have_mncdi : in integer range 0 to 1 := 0;
+      have_mncdi_pulse_stretch : integer range 0 to 127 := 10;
+      have_mncdi_pulse_invert : integer range 0 to 1 := 0;
 
       reset : in std_logic;
 
@@ -93,6 +95,10 @@ signal sbr : std_logic_vector(15 downto 0);
 signal last_strobe : std_logic;
 signal td : std_logic_vector(15 downto 12);
 
+signal reply_length : integer range 0 to 127 := 0;
+signal lreply : std_logic;
+
+
 begin
 
    base_addr_match <= '1' when base_addr(17 downto 3) = bus_addr(17 downto 3) and have_mncdi = 1 else '0';
@@ -101,9 +107,13 @@ begin
    icsr <= icsr_overrun & icsr_errie & '0' & icsr_disinp & "00" & icsr_pgmout & icsr_tren & icsr_done & icsr_ie & icsr_invdata & icsr_pnlsw & icsr_invstr & icsr_stim & icsr_extstrb & icsr_go;
 
    dir <= ddir when icsr_invdata = '0' else not ddir;
-   reply <= icsr_done;
    pgmout <= icsr_pgmout;
-   event <= icsr_done;                                               -- not quite clear from the manuals, but the schematics seem to indicate it is probably 'j2 fp output low' and that is derived from the done bit
+
+-- the event output - it is not quite clear from the manuals, but the schematics seem to indicate it is probably 'j2 fp output low' and that is derived from the done bit
+-- also, the B7_WwMD says that 'the EVENT terminal is not used or required by any MINC routines', and 'a pulse of several microseconds duration'
+   event <= icsr_done;
+
+   reply <= not lreply when have_mncdi_pulse_invert = 0 else lreply;
 
    process(clk, base_addr_match, reset, have_mncdi)
       variable v_strobe : std_logic;
@@ -184,6 +194,8 @@ begin
                icsr_go <= '0';
                ddir <= (others => '0');
                sbr <= (others => '0');
+               lreply <= '0';
+               reply_length <= 0;
 
                last_strobe <= strobe;
             else
@@ -234,6 +246,7 @@ begin
                            icsr_disinp <= bus_dato(12);
                            if bus_dato(11) = '1' and icsr_stim = '0' then      -- maintenance strobe
                               icsr_done <= '1';
+                              reply_length <= have_mncdi_pulse_stretch;
                               if icsr_done = '0' then
                                  if icsr_disinp = '0' then
                                     ddir <= d;
@@ -274,10 +287,12 @@ begin
                         icsr_overrun <= '1';
                      end if;
                      icsr_done <= '1';
+                     reply_length <= have_mncdi_pulse_stretch;
                   end if;
                end if;
                if icsr_stim = '1' and (((d xor ddir) and sbr) /= "0000000000000000") then
                   icsr_done <= '1';
+                  reply_length <= have_mncdi_pulse_stretch;
                   icsr_overrun <= '1';
                end if;
                if icsr_disinp = '0' then
@@ -285,11 +300,19 @@ begin
                      ddir <= d;
                      if icsr_tren = '1' and d(15 downto 12) /= ddir(15 downto 12) then
                         icsr_done <= '1';
+                        reply_length <= have_mncdi_pulse_stretch;
                         icsr_overrun <= '1';
                      end if;
                   end if;
                end if;
                last_strobe <= strobe;
+
+               if reply_length /= 0 then
+                  reply_length <= reply_length - 1;
+                  lreply <= '1';
+               else
+                  lreply <= '0';
+               end if;
 
             end if;
          end if;

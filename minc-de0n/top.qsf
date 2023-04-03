@@ -41,7 +41,7 @@
 # ========================
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 11.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "00:17:06  AUGUST 26, 2011"
-set_global_assignment -name LAST_QUARTUS_VERSION "20.1.0 Lite Edition"
+set_global_assignment -name LAST_QUARTUS_VERSION "22.1std.0 Lite Edition"
 
 # Pin & Location Assignments
 # ==========================
@@ -227,17 +227,21 @@ set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[2]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[1]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to panel_col[0]
 set_global_assignment -name ENABLE_SIGNALTAP OFF
-set_global_assignment -name USE_SIGNALTAP_FILE stpda4.stp
-set_global_assignment -name EDA_SIMULATION_TOOL "ModelSim-Altera (VHDL)"
+set_global_assignment -name USE_SIGNALTAP_FILE stp1.stp
+set_global_assignment -name EDA_SIMULATION_TOOL "Questa Intel FPGA (VHDL)"
 
-set_location_assignment PIN_D16 -to nv_csag
-set_location_assignment PIN_D15 -to nv_mosi
-set_location_assignment PIN_D14 -to nv_miso
-set_location_assignment PIN_F15 -to nv_sclk
-set_location_assignment PIN_F16 -to nv_int
-set_location_assignment PIN_F14 -to nv_drdym
-set_location_assignment PIN_G16 -to nv_csm
-set_location_assignment PIN_G15 -to nv_csa
+set_location_assignment PIN_D14 -to mi0_scl
+set_location_assignment PIN_F15 -to mi0_sda
+#set_location_assignment PIN_D14 -to mo0_scl
+#set_location_assignment PIN_F15 -to mo0_sda
+set_location_assignment PIN_C16 -to mo1_scl
+set_location_assignment PIN_A14 -to mo1_sda
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to mi0_scl
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to mi0_sda
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to mo0_scl
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to mo0_sda
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to mo1_scl
+set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to mo1_sda
 
 set_location_assignment PIN_F2 -to adxl345_scl
 set_location_assignment PIN_F1 -to adxl345_sda
@@ -245,54 +249,83 @@ set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to adxl345_scl
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to adxl345_sda
 set_location_assignment PIN_G5 -to adxl345_cs
 
+set_location_assignment PIN_D15 -to mnckw0_st1in
+set_location_assignment PIN_D16 -to mnckw0_st1out
+set_location_assignment PIN_F14 -to mnckw0_st2in
+set_location_assignment PIN_F16 -to mnckw0_st2out
+set_location_assignment PIN_G16 -to mnckw0_clkov
+
 
 set_global_assignment -name ENABLE_OCT_DONE OFF
 set_global_assignment -name CYCLONEII_RESERVE_NCEO_AFTER_CONFIGURATION "USE AS REGULAR IO"
 
 
 
-set_global_assignment -name VHDL_FILE ../mincdrv/pmodda4.vhd
+set_global_assignment -name EDA_OUTPUT_DATA_FORMAT VHDL -section_id eda_simulation
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
+
+
 set_global_assignment -name VHDL_FILE de0nadxl345.vhd
-set_global_assignment -name VHDL_FILE ../mincdrv/pmodnav.vhd
-set_global_assignment -name VHDL_FILE ../mincdrv/pmodcolor.vhd
-set_global_assignment -name VHDL_FILE ../mincdrv/pmodhygro.vhd
-set_global_assignment -name VHDL_FILE ../m9312h48.vhd
-set_global_assignment -name VHDL_FILE ../m9312l48.vhd
-set_global_assignment -name VHDL_FILE ../mncdo.vhd
-set_global_assignment -name VHDL_FILE ../mncdi.vhd
-set_global_assignment -name VHDL_FILE ../mincdrv/pmodda2.vhd
 set_global_assignment -name VHDL_FILE de0nadc.vhd
-set_global_assignment -name VHDL_FILE ../mncaa.vhd
-set_global_assignment -name VHDL_FILE ../mnckw.vhd
-set_global_assignment -name VHDL_FILE ../mncad.vhd
-set_global_assignment -name VHDL_FILE ../sdspi.vhd
-set_global_assignment -name VHDL_FILE ../dr11c.vhd
-set_global_assignment -name VHDL_FILE ../panelos.vhd
-set_global_assignment -name VHDL_FILE ../paneldb.vhd
-set_global_assignment -name VHDL_FILE ../paneldriver.vhd
 set_global_assignment -name SDC_FILE de0n.sdc
-set_global_assignment -name VHDL_FILE ../xu.vhd
-set_global_assignment -name VHDL_FILE ../xubl.vhd
-set_global_assignment -name VHDL_FILE ../xubm.vhd
-set_global_assignment -name VHDL_FILE ../xubrt45.vhd
-set_global_assignment -name VHDL_FILE ../kl11.vhd
-set_global_assignment -name VHDL_FILE ../rh11.vhd
 set_global_assignment -name VHDL_FILE top.vhd
-set_global_assignment -name VHDL_FILE ../unibus.vhd
-set_global_assignment -name VHDL_FILE ../rl11.vhd
-set_global_assignment -name VHDL_FILE ../rk11.vhd
-set_global_assignment -name VHDL_FILE ../mmu.vhd
-set_global_assignment -name VHDL_FILE ../kw11l.vhd
-set_global_assignment -name VHDL_FILE ../fpuregs.vhd
-set_global_assignment -name VHDL_FILE ../csdr.vhd
-set_global_assignment -name VHDL_FILE ../cr.vhd
-set_global_assignment -name VHDL_FILE ../cpuregs.vhd
-set_global_assignment -name VHDL_FILE ../cpu.vhd
 set_global_assignment -name QIP_FILE pll.qip
 set_global_assignment -name SOURCE_FILE Spf1.spf
 set_global_assignment -name SOURCE_FILE db/top.cmp.rdb
 set_global_assignment -name SIGNALTAP_FILE stpx.stp
 set_global_assignment -name SIGNALTAP_FILE stpa.stp
-
 set_global_assignment -name SIGNALTAP_FILE stpda4.stp
-set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
+set_global_assignment -name SIGNALTAP_FILE stp1mmxdo.stp
+set_global_assignment -name SIGNALTAP_FILE kl11.stp
+set_global_assignment -name VHDL_FILE ../unibus.vhd
+set_global_assignment -name VHDL_FILE ../pdp2011.vhd
+set_global_assignment -name VHDL_FILE ../sdram.vhd
+set_global_assignment -name VHDL_FILE ../panelos.vhd
+set_global_assignment -name VHDL_FILE ../paneldb.vhd
+set_global_assignment -name VHDL_FILE ../paneldriver.vhd
+set_global_assignment -name VHDL_FILE ../cpu.vhd
+set_global_assignment -name VHDL_FILE ../cpuregs.vhd
+set_global_assignment -name VHDL_FILE ../fpuregs.vhd
+set_global_assignment -name VHDL_FILE ../cr.vhd
+set_global_assignment -name VHDL_FILE ../mmu.vhd
+set_global_assignment -name VHDL_FILE ../kl11.vhd
+set_global_assignment -name VHDL_FILE ../kw11l.vhd
+set_global_assignment -name VHDL_FILE ../csdr.vhd
+set_global_assignment -name VHDL_FILE ../rh11.vhd
+set_global_assignment -name VHDL_FILE ../rl11.vhd
+set_global_assignment -name VHDL_FILE ../rk11.vhd
+set_global_assignment -name VHDL_FILE ../sdspi.vhd
+set_global_assignment -name VHDL_FILE ../dr11c.vhd
+set_global_assignment -name VHDL_FILE ../xu.vhd
+set_global_assignment -name VHDL_FILE ../xubl.vhd
+set_global_assignment -name VHDL_FILE ../xubm.vhd
+set_global_assignment -name VHDL_FILE ../xubr.vhd
+set_global_assignment -name VHDL_FILE ../xubf.vhd
+set_global_assignment -name VHDL_FILE ../xubw.vhd
+set_global_assignment -name VHDL_FILE ../mncdo.vhd
+set_global_assignment -name VHDL_FILE ../mncdi.vhd
+set_global_assignment -name VHDL_FILE ../mncaa.vhd
+set_global_assignment -name VHDL_FILE ../mnckw.vhd
+set_global_assignment -name VHDL_FILE ../mncad.vhd
+set_global_assignment -name VHDL_FILE ../ibv11.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/miodi.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/miodo.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/mncadagg.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/mncadtpg.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodcolor.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodda2.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodda4.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodhygro.vhd
+set_global_assignment -name VHDL_FILE ../mincdrv/pmodnav.vhd
+set_global_assignment -name VHDL_FILE ../vt.vhd
+set_global_assignment -name VHDL_FILE ../vtbr.vhd
+set_global_assignment -name VHDL_FILE ../vga.vhd
+set_global_assignment -name VHDL_FILE ../vgacr.vhd
+set_global_assignment -name VHDL_FILE ../vgafont.vhd
+set_global_assignment -name VHDL_FILE ../ps2.vhd
+set_global_assignment -name VHDL_FILE "../m9312h-pdp2011.vhd"
+set_global_assignment -name VHDL_FILE "../m9312l-pdp2011.vhd"
+set_global_assignment -name VHDL_FILE "../m9312h-odt.vhd"
+set_global_assignment -name VHDL_FILE "../m9312l-odt.vhd"
+set_global_assignment -name VHDL_FILE "../m9312h-minc.vhd"
+set_global_assignment -name VHDL_FILE "../m9312l-minc.vhd"

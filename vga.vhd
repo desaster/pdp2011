@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -440,16 +440,16 @@ begin
                g0val <= graph0(conv_integer(graph_col));
                g1val <= graph1(conv_integer(graph_col));
                gcoldata <= graphdata(conv_integer(graph_col));
-               if vga_col = 209 then
+               if vga_col = 207 then
                   graph_col <= '0' & graph_row;
-               elsif vga_col = 211 then
+               elsif vga_col = 209 then
                   growdata <= gcoldata;
                   if vga_strip0 = '1' or vga_strip1 = '1' then
                      graph_col <= vga_xp;
                   else
                      graph_col <= (others => '0');
                   end if;
-               elsif vga_col > 212 and vga_col <= 724 then
+               elsif vga_col >= 211 and vga_col <= 723 then
                   graph_col <= graph_col + 1;
                   if vga_graph0 = '1' and g0val = graph_row then
                      fb <= '1';
@@ -484,6 +484,7 @@ begin
                      ht <= '1';
                   end if;
                end if;
+
             end if;
 
 --

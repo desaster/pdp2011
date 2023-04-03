@@ -1,45 +1,41 @@
 
-m9312h = m9312h46.vhd m9312h47.vhd m9312h48.vhd
 m9312hs = m9312h40.vhd
-m9312l = m9312l46.vhd m9312l47.vhd m9312l48.vhd
 
-blockrams = blockramt42.vhd
+bootroms = m9312l-minc.vhd m9312h-minc.vhd m9312l-pdp2011.vhd m9312h-pdp2011.vhd m9312l-odt.vhd m9312h-odt.vhd
+
 blockram = blockramt25.vhd blockramt27.vhd
 
-vtbr = vtbrt42.vhd
-xubr = xubrt45.vhd
+vtbr = vtbr.vhd
+xubr = xubr.vhd
+xubw = xubw.vhd
 
-allromram = $(m9312h) $(m9312l) $(vtbr) $(xubr)
+allromram = $(bootroms) $(vtbr) $(xubr) $(xubw) $(m9312hs) vgafont.vhd
 
-all: $(allromram) vgafont.vhd
+all: $(allromram)
 
-vgafont.vhd: vgafont.txt
-	sed -i '/FONTDATA/d' vgafont.vhd
-	tools/fontconvert vgafont.txt|sed -i -e '/INSERT/r /dev/stdin' vgafont.vhd
+vgafont.vhd: vgafont.txt vgafont.mem
+	fontconvert vgafont.txt|sed -e '/INSERT/r /dev/stdin' vgafont.mem >$@
 
 %.obj: %.mac
 	macro11 $< -o $*.obj -l $*.lst
 
-$(m9312h): %.vhd: %.obj
-	genblkram -t m9312h -s 16 -i $*.obj -o $@
+$(bootroms): %.vhd: %.obj %.mem
+	genblkram -s 16 -i $*.obj|sed -e '/INSERT/r /dev/stdin' $*.mem >$@
 
-$(m9312hs): %.vhd: %.obj
-	genblkram -t m9312h -s 1 -i $*.obj -o $@
+$(m9312hs): %.vhd: %.obj %.mem
+	genblkram -s 1 -i $*.obj|sed -e '/INSERT/r /dev/stdin' $*.mem >$@
 
-$(m9312l): %.vhd: %.obj
-	genblkram -t m9312l -s 16 -i $*.obj -o $@
+$(blockram): %.vhd: %.obj %.mem
+	genblkram -s 512 -i $*.obj|sed -e '/INSERT/r /dev/stdin' $*.mem >$@
 
-$(blockrams): %.vhd: %.obj
-	genblkram -t blockram -s 128 -i $*.obj -o $@
+$(vtbr): %.vhd: %.obj %.mem
+	genblkram -s 256 -i $*.obj|sed -e '/INSERT/r /dev/stdin' $*.mem >$@
 
-$(blockram): %.vhd: %.obj
-	genblkram -t blockram -s 512 -i $*.obj -o $@
+$(xubr): %.vhd: %.obj %.mem
+	genblkram -s 256 -i $*.obj|sed -e '/INSERT/r /dev/stdin' $*.mem >$@
 
-$(vtbr): %.vhd: %.obj
-	genblkram -t vtbr -s 256 -i $*.obj -o $@
-
-$(xubr): %.vhd: %.obj
-	genblkram -t xubr -s 256 -i $*.obj -o $@
+$(xubw): %.vhd: %.obj %.mem
+	genblkram -s 512 -i $*.obj|sed -e '/INSERT/r /dev/stdin' $*.mem >$@
 
 clean:
 	rm -f $(allromram) $(allromram:.vhd=.obj) $(allromram:.vhd=.lst)

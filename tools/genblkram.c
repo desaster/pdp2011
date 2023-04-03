@@ -228,7 +228,6 @@ void dump_words2(unsigned addr, char *buf, int len)
 
    for(i = 0; i < len; i += 8)
    {
-//      printf("\t%04x: ", addr);
 
       for(j = i; j < len && j < i+8; j += 2)
       {
@@ -236,15 +235,10 @@ void dump_words2(unsigned addr, char *buf, int len)
             unsigned word = WORD(buf + j);
             blkram[addr + j]=*(buf+j);
             blkram[addr + j + 1]=*(buf+j+1);
-//            printf("%04x ", word);
          } else {
             blkram[addr + j]=*(buf+j);
-//            printf("%02x    ", buf[j] & 0xff);
          }
       }
-
-//      putchar('\n');
-//      addr += 8;
    }
 }
 
@@ -419,15 +413,15 @@ void got_endgsd(char *cp, int len)
 
 	qsort(all_gsds, nr_gsds, sizeof(char *), compare_gsdlines);
 
-	printf("GSD:\n");
+	fprintf(stderr, "GSD:\n");
 
 	for(i = 0; i < nr_gsds; i++)
 	{
-		fputs(all_gsds[i], stdout);
+		fputs(all_gsds[i], stderr);
 		free(all_gsds[i]);
 	}
 
-	printf("ENDGSD\n");
+	fprintf(stderr, "ENDGSD\n");
 
 	free(all_gsds);
 }
@@ -477,30 +471,30 @@ void got_rld(char *cp, int len)
 		switch(cp[i] & 0x7f)
 		{
 		case 01:
-//			printf("\tInternal%s %o=%o\n", byte, addr, WORD(cp+i+2));
+//			fprintf(stderr, "\tInternal%s %o=%o\n", byte, addr, WORD(cp+i+2));
 			i += 4;
 			break;
 		case 02:
 			rad50name(cp+i+2, name);
-			printf("\tGlobal%s %o=%s\n", byte, addr, name);
+			fprintf(stderr, "\tGlobal%s %o=%s\n", byte, addr, name);
          wrong++;
 			i += 6;
 			break;
 		case 03:
-			printf("\tInternal displaced%s %o=%o\n", byte, addr, WORD(cp+i+2));
+			fprintf(stderr, "\tInternal displaced%s %o=%o\n", byte, addr, WORD(cp+i+2));
 			i += 4;
 //			badbin = 1;
 			break;
 		case 04:
 			rad50name(cp+i+2, name);
-			printf("\tGlobal displaced%s %o=%s\n", byte, addr, name);
+			fprintf(stderr, "\tGlobal displaced%s %o=%s\n", byte, addr, name);
 			i += 6;
 //			badbin = 1;
 			break;
 		case 05:
 			rad50name(cp+i+2, name);
 			word = WORD(cp+i+6);
-			printf("\tGlobal plus offset%s %o=%s+%o\n",
+			fprintf(stderr, "\tGlobal plus offset%s %o=%s+%o\n",
 				byte, addr, name, word);
 			i += 8;
 			badbin = 1;
@@ -508,7 +502,7 @@ void got_rld(char *cp, int len)
 		case 06:
 			rad50name(cp+i+2, name);
 			word = WORD(cp+i+6);
-			printf("\tGlobal plus offset displaced%s %o=%s+%o\n",
+			fprintf(stderr, "\tGlobal plus offset displaced%s %o=%s+%o\n",
 				byte, addr, name, word);
 			i += 8;
 			badbin = 1;
@@ -516,7 +510,7 @@ void got_rld(char *cp, int len)
 		case 07:
 			rad50name(cp+i+2, name);
 			word = WORD(cp+i+6);
-			printf("\tLocation counter definition %s+%o\n",
+			fprintf(stderr, "\tLocation counter definition %s+%o\n",
 				name, word);
          if (word < lowestloc) lowestloc=word;
 			i += 8;
@@ -525,33 +519,33 @@ void got_rld(char *cp, int len)
 			break;
 		case 010:
 			word = WORD(cp+i+2);
-//			printf("\tLocation counter modification %o\n", word);
+//			fprintf(stderr, "\tLocation counter modification %o\n", word);
 			i += 4;
 
 			last_text_addr = word;
 			break;
 		case 011:
-			printf("\t.LIMIT %o\n", addr);
+			fprintf(stderr, "\t.LIMIT %o\n", addr);
 			i += 2;
 			break;
 
 		case 012:
 			rad50name(cp+i+2, name);
-			printf("\tPSECT%s %o=%s\n", byte, addr, name);
+			fprintf(stderr, "\tPSECT%s %o=%s\n", byte, addr, name);
 			i += 6;
 			badbin = 1;
 			break;
 		case 014:
 			rad50name(cp+i+2, name);
 
-			printf("\tPSECT displaced%s %o=%s+%o\n", byte, addr, name, word);
+			fprintf(stderr, "\tPSECT displaced%s %o=%s+%o\n", byte, addr, name, word);
 			i += 6;
 			badbin = 1;
 			break;
 		case 015:
 			rad50name(cp+i+2, name);
 			word = WORD(cp+i+6);
-			printf("\tPSECT plus offset%s %o=%s+%o\n",
+			fprintf(stderr, "\tPSECT plus offset%s %o=%s+%o\n",
 				byte, addr, name, word);
 			i += 8;
 			badbin = 1;
@@ -559,7 +553,7 @@ void got_rld(char *cp, int len)
 		case 016:
 			rad50name(cp+i+2, name);
 			word = WORD(cp+i+6);
-			printf("\tPSECT plus offset displaced%s %o=%s+%o\n",
+			fprintf(stderr, "\tPSECT plus offset displaced%s %o=%s+%o\n",
 				byte, addr, name, word);
 			i += 8;
 			badbin = 1;
@@ -567,7 +561,7 @@ void got_rld(char *cp, int len)
 
 		case 017:
 			badbin = 1;
-			printf("\tComplex%s %o=", byte, addr);
+			fprintf(stderr, "\tComplex%s %o=", byte, addr);
 			i += 2;
 			{
 				char *xp = cp + i;
@@ -602,24 +596,24 @@ void got_rld(char *cp, int len)
 
 					case 016:
 						rad50name(xp+1, name);
-						printf("%s ", name);
+						fprintf(stderr, "%s ", name);
 						size = 5;
 						break;
 
 					case 017:
 						assert((xp[1] & 0377) < psectid);
-						printf("%s:%o ",
+						fprintf(stderr, "%s:%o ",
 							psects[xp[1] & 0377],
 							WORD(xp+2));
 						size = 4;
 						break;
 
 					case 020:
-						printf("%o ", WORD(xp+1));
+						fprintf(stderr, "%o ", WORD(xp+1));
 						size = 3;
 						break;
 					default:
-						printf("**UNKNOWN COMPLEX CODE** %o\n", *xp & 0377);
+						fprintf(stderr, "**UNKNOWN COMPLEX CODE** %o\n", *xp & 0377);
 						return;
 					}
 					i += size;
@@ -632,7 +626,7 @@ void got_rld(char *cp, int len)
 			}
 
 		default:
-			printf("\t***Unknown RLD code %o\n", cp[i] & 0xff);
+			fprintf(stderr, "\t***Unknown RLD code %o\n", cp[i] & 0xff);
 			return;
 		}
 	}
@@ -641,22 +635,22 @@ void got_rld(char *cp, int len)
 
 void got_isd(char *cp, int len)
 {
-	printf("ISD len=%o\n");
+	fprintf(stderr, "ISD len=%o\n");
 }
 
 void got_endmod(char *cp, int len)
 {
-	printf("ENDMOD\n");
+	fprintf(stderr, "ENDMOD\n");
 }
 
 void got_libhdr(char *cp, int len)
 {
-	printf("LIBHDR\n");
+	fprintf(stderr, "LIBHDR\n");
 }
 
 void got_libend(char *cp, int len)
 {
-	printf("LIBEND\n");
+	fprintf(stderr, "LIBEND\n");
 }
 
 
@@ -699,7 +693,7 @@ void process(char *filename)
          got_libend(cp, len);
          break;
       default:
-         printf("Unknown record type %d\n", cp[0] & 0xff);
+         fprintf(stderr, "Unknown record type %d\n", cp[0] & 0xff);
          break;
       }
 
@@ -725,6 +719,15 @@ void usage()
    fprintf(stderr, "                       usual variants are 16 for m9312 roms and 512 for blockrams\n");
    fprintf(stderr, "                    -t template file basename, must exist in form <basename>.t1 and <basename.t2>\n");
    fprintf(stderr, "                       usual variants are m9312l, m9312h, blockram\n");
+   fprintf(stderr, "\n");
+   fprintf(stderr, "                     the blkram output will be composed of the templates and the output\n");
+   fprintf(stderr, "                     will be written to the file named in -o\n");
+   fprintf(stderr, "\n");
+   fprintf(stderr, "or\n");
+   fprintf(stderr, "\n");
+   fprintf(stderr, "genblkram [-s size] -i <input object file>\n");
+   fprintf(stderr, "                     the blkram output will be written to stdout\n");
+   fprintf(stderr, "\n");
 }
 
 
@@ -797,13 +800,11 @@ int main(int argc, char *argv[])
       usage();
       exit(24);
    }
-   if (!myflago) {
-      usage();
-      exit(24);
-   }
-   if (!myflagt) {
-      usage();
-      exit(24);
+   if (myflago) {
+      if (!myflagt) {
+         usage();
+         exit(24);
+      }
    }
 
    process(fn);
@@ -813,25 +814,29 @@ int main(int argc, char *argv[])
 
    ec=myflags;
 
-   fp = fopen(fno, "w");
-   if(fp == NULL) {
-      fprintf(stderr, "could not open fp\n");
-      exit(24);
+   if (myflago) {
+      fp = fopen(fno, "w");
+      if(fp == NULL) {
+         fprintf(stderr, "could not open fp\n");
+         exit(24);
+      }
+      t1 = fopen(temp1, "r");
+      if(t1 == NULL) {
+         fprintf(stderr, "could not open t1\n");
+         exit(24);
+      }
+      while ((c=fgetc(t1))!=EOF) fputc(c, fp);
+      fclose(t1);
+   } else {
+      fp = stdout;
    }
-   t1 = fopen(temp1, "r");
-   if(t1 == NULL) {
-      fprintf(stderr, "could not open t1\n");
-      exit(24);
-   }
-   while ((c=fgetc(t1))!=EOF) fputc(c, fp);
-   fclose(t1);
 
    if (lowestloc==65535) {
       lowestloc=0;
       fprintf(stderr, "code base defaulted\n");
    }
    fprintf(stderr, "CODE BASE AT %o\n", lowestloc);
-   fprintf(fp, "-- code base at %o\n\n", lowestloc);
+   fprintf(fp, "\n-- code base at %o\n\n", lowestloc);
    fprintf(fp, "signal meme : mem_type := mem_type'(\n");
    for (i=0; i<ec; i++) {
       for (j=0; j<32; j+=2) {
@@ -840,6 +845,7 @@ int main(int argc, char *argv[])
       fprintf(fp, "\n");
    }
    fprintf(fp, ");\n");
+   fprintf(fp, "\n");
    fprintf(fp, "signal memo : mem_type := mem_type'(\n");
    for (i=0; i<ec; i++) {
       for (j=1; j<32; j+=2) {
@@ -849,15 +855,17 @@ int main(int argc, char *argv[])
    }
    fprintf(fp, ");\n");
 
-   t1 = fopen(temp2, "r");
-   if(t1 == NULL) {
-      fprintf(stderr, "could not open t2\n");
-      exit(24);
-   }
-   while ((c=fgetc(t1))!=EOF) fputc(c, fp);
-   fclose(t1);
+   if (myflago) {
+      t1 = fopen(temp2, "r");
+      if(t1 == NULL) {
+         fprintf(stderr, "could not open t2\n");
+         exit(24);
+      }
+      while ((c=fgetc(t1))!=EOF) fputc(c, fp);
+      fclose(t1);
 
-   fclose(fp);
+      fclose(fp);
+   }
 
    if (myflagb) {
       bf=fopen(fnb, "w");

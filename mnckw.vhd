@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -43,6 +43,8 @@ entity mnckw is
       clkov : out std_logic;
 
       have_mnckw : in integer range 0 to 1 := 0;
+      have_mnckw_pulse_stretch : integer range 0 to 127 := 5;
+      have_mnckw_pulse_invert : integer range 0 to 1 := 0;
 
       reset : in std_logic;
 
@@ -138,12 +140,28 @@ signal counter_st2_pulse_ack : std_logic;
 signal st2_pulse_ack_filter : filter_out_t;
 signal st2_pulse_ack : std_logic;
 
+signal st1_stretch : integer range 0 to 127 := 0;
+signal st2_stretch : integer range 0 to 127 := 0;
+signal ovf_stretch : integer range 0 to 127 := 0;
+signal lst1out : std_logic;
+signal lst2out : std_logic;
+signal lclkov : std_logic;
+
+signal st1_1 : std_logic;
+signal st1_f : std_logic;
+signal st2_1 : std_logic;
+signal st2_f : std_logic;
+
 begin
 
    base_addr_match <= '1' when base_addr(17 downto 2) = bus_addr(17 downto 2) and have_mnckw = 1 else '0';
    bus_addr_match <= base_addr_match;
 
    kwcsr <= kwcsr_st2flag & kwcsr_stintenable & kwcsr_st2goenable & kwcsr_for & kwcsr_disintosc & kwcsr_st1flag &"00" & kwcsr_ovfflag & kwcsr_ovfintenable & kwcsr_rate & kwcsr_mode & kwcsr_go;
+
+   st1out <= not lst1out when have_mnckw_pulse_invert = 0 else lst1out;
+   st2out <= not lst2out when have_mnckw_pulse_invert = 0 else lst2out;
+   clkov <= not lclkov when have_mnckw_pulse_invert = 0 else lclkov;
 
    process(clk, base_addr_match, reset, have_mnckw)
    begin
@@ -211,8 +229,9 @@ begin
          end if;
 
          if have_mnckw = 0 then
-            st1out <= '0';
-            clkov <= '0';
+            lst1out <= '0';
+            lst2out <= '0';
+            lclkov <= '0';
          else
             if reset = '1' then
                kwcsr_st2flag <= '0';
@@ -229,14 +248,23 @@ begin
                kwbuf_preset <= (others => '0');
                ovfflag_set_trigger <= '0';
 
-               st1out <= '0';
-               st2out <= '0';
+               lst1out <= '0';
+               lst2out <= '0';
                st1in_last <= '0';
                st2in_last <= '0';
                st1_trigger <= '0';
                st2_trigger <= '0';
-               clkov <= '0';
+               lclkov <= '0';
                ovf_ack <= '0';
+
+               st1_stretch <= 0;
+               st2_stretch <= 0;
+               ovf_stretch <= 0;
+               st1_1 <= '0';
+               st1_f <= '0';
+               st2_1 <= '0';
+               st2_f <= '0';
+
             else
 
                if base_addr_match = '1' and bus_control_dati = '1' then
@@ -296,20 +324,49 @@ begin
 
                end if;
 
-               st1out <= kwcsr_st1flag;
-               st2out <= kwcsr_st2flag;
-               clkov <= kwcsr_ovfflag;
+               st1_1 <= st1in;
+               st1_f <= st1_1;
+               st2_1 <= st2in;
+               st2_f <= st2_1;
 
-               if st1_trigger = '1' or (st1in /= st1in_last and st1in = '1') then
+               if st1_pulse = '1' then
+                  st1_stretch <= have_mnckw_pulse_stretch;
+               end if;
+               if st1_stretch /= 0 then
+                  st1_stretch <= st1_stretch - 1;
+                  lst1out <= '1';
+               else
+                  lst1out <= '0';
+               end if;
+               if st2_pulse = '1' then
+                  st2_stretch <= have_mnckw_pulse_stretch;
+               end if;
+               if st2_stretch /= 0 then
+                  st2_stretch <= st2_stretch - 1;
+                  lst2out <= '1';
+               else
+                  lst2out <= '0';
+               end if;
+               if kwcsr_ovfflag = '1' then
+                  ovf_stretch <= have_mnckw_pulse_stretch;
+               end if;
+               if ovf_stretch /= 0 then
+                  ovf_stretch <= ovf_stretch - 1;
+                  lclkov <= '1';
+               else
+                  lclkov <= '0';
+               end if;
+
+               if st1_trigger = '1' or (st1_f /= st1in_last and st1_f = '1') then
                   st1_pulse <= '1';
                   if kwcsr_st1flag = '1' then
                      kwcsr_for <= '1';
                   end if;
                   st1_trigger <= '0';
                end if;
-               st1in_last <= st1in;
+               st1in_last <= st1_f;
 
-               if st2_trigger = '1' or (st2in /= st2in_last and st2in = '1')  then
+               if st2_trigger = '1' or (st2_f /= st2in_last and st2_f = '1')  then
                   st2_pulse <= '1';
                   if kwcsr_st2goenable = '1' then
                      kwcsr_go <= '1';
@@ -320,7 +377,7 @@ begin
                   end if;
                   st2_trigger <= '0';
                end if;
-               st2in_last <= st2in;
+               st2in_last <= st2_f;
 
                counter_overflow_filter <= counter_overflow_filter(filter_out_t'high-1 downto 0) & counter_overflow;
                if counter_overflow_filter = filter_out_t'(others => '0') then

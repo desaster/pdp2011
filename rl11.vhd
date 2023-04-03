@@ -1,6 +1,6 @@
 
 --
--- Copyright (c) 2008-2021 Sytse van Slooten
+-- Copyright (c) 2008-2023 Sytse van Slooten
 --
 -- Permission is hereby granted to any person obtaining a copy of these VHDL source files and
 -- other language source files and associated documentation files ("the materials") to use
@@ -150,7 +150,7 @@ signal update_mpr : std_logic;
 signal hs_offset : std_logic_vector(17 downto 0);
 signal ca_offset : std_logic_vector(17 downto 0);
 signal dn_offset : std_logic_vector(17 downto 0);
-signal sd_addr : std_logic_vector(17 downto 0);
+signal sd_addr : std_logic_vector(23 downto 0);
 
 signal work_bar : std_logic_vector(17 downto 1);
 
@@ -202,7 +202,7 @@ begin
       sdcard_miso => sdcard_miso,
       sdcard_debug => sdcard_debug,
 
-      sdcard_addr => "000000" & sd_addr,
+      sdcard_addr => sd_addr,
 
       sdcard_idle => sdcard_idle,
       sdcard_read_start => sdcard_read_start,
@@ -584,7 +584,7 @@ begin
    ca_offset <= ("00000" & dnca(conv_integer(csr_ds)) & "0000") + ("000" & dnca(conv_integer(csr_ds)) & "000000");     -- cyl#  * 2 * 40
    dn_offset <= (('0' & csr_ds & "0000000000000") + ('0' & csr_ds & "000000000000000"));                               -- disk * 512 * 2 * 40
 
-   sd_addr <= (dn_offset + hs_offset) + (ca_offset + ("000000000000" & dar(5 downto 0)));
+   sd_addr <= "000000" & (dn_offset + hs_offset) + (ca_offset + ("000000000000" & dar(5 downto 0)));
 
 -- busmaster
 
